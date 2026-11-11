@@ -118,6 +118,85 @@
   let renderScheduled = false;
   let renderForce = false;
   const pool = [];
+  let entryLocations = new WeakMap();
+  let draftBaseline = null;
+  let draftSaveFailed = false;
+  let draftVersion = 0;
+  let pendingDraftSaves = 0;
+
+  function draftStatus(state, message, canClear = loadedCatalogs.length > 0) {
+    document.dispatchEvent(new CustomEvent('translation-draft-status', {
+      detail: {state, message, canClear},
+    }));
+  }
+
+  function draftError() {
+    draftSaveFailed = true;
+    draftBaseline = null;
+    draftStatus('error', '一時保存できません。変更を残すには PO を書き出してください。', true);
+  }
+
+  async function trackDraftSave(operation, message = 'このブラウザーに一時保存しました') {
+    const version = ++draftVersion;
+    pendingDraftSaves++;
+    draftStatus('saving', 'このブラウザーに一時保存しています…');
+    try {
+      await operation;
+      if (version === draftVersion) {
+        draftSaveFailed = false;
+        draftStatus('saved', message);
+      }
+    } catch {
+      if (version === draftVersion) draftError();
+    } finally {
+      pendingDraftSaves--;
+    }
+  }
+
+  function ensureDraftBaseline() {
+    if (!draftBaseline) {
+      const baseline = DraftStore.remember(loadedCatalogs);
+      draftBaseline = baseline;
+      baseline.catch(() => {
+        if (draftBaseline === baseline) draftBaseline = null;
+      });
+    }
+    return draftBaseline;
+  }
+
+  function saveDrafts() {
+    // A small draft write succeeding is insufficient if the original file failed
+    // to save. Every edit waits for both transactions before claiming success.
+    const baseline = ensureDraftBaseline();
+    const changes = DraftStore.save(loadedCatalogs, draftRevisions());
+    trackDraftSave(Promise.all([baseline, changes]));
+  }
+
+  function draftRevisions() {
+    const revisions = loadedCatalogs.map(() => []);
+    for (const [entry, values] of edits) {
+      const location = entryLocations.get(entry);
+      if (location) revisions[location.catalog].push([location.index, values]);
+    }
+    return revisions;
+  }
+
+  document.addEventListener('translation-clear-drafts', () => {
+    draftBaseline = null;
+    edits.clear();
+    updateChangedCount();
+    previousDone = false;
+    scheduleSearch();
+    trackDraftSave(DraftStore.clear(), '一時保存を削除しました。次に編集すると自動保存します。');
+  });
+
+  // Warn only while a save is still pending or has failed with unsaved edits.
+  window.addEventListener('beforeunload', (event) => {
+    if (pendingDraftSaves || (draftSaveFailed && edits.size)) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  });
 
   /**
    * @return {Promise<void>}
@@ -479,6 +558,7 @@
     row.dataset.changed = changed ? '1' : '0';
     row._ui.changed.hidden = !changed;
     updateChangedCount();
+    saveDrafts();
     const hitIndex = Number(row.dataset.hit);
     requestAnimationFrame(() => {
       if (!row.isConnected || hitIndex >= heights.length) {
@@ -825,10 +905,11 @@
    * @param {Object[]} catalogs
    * @param {string[]} skipped
    */
-  function adoptCatalogs(catalogs, skipped) {
+  function adoptCatalogs(catalogs, skipped, drafts = []) {
     entries = [];
     loadedCatalogs = catalogs;
     edits.clear();
+    entryLocations = new WeakMap();
     buckets = {untranslated: [], fuzzy: [], translated: []};
     let obsolete = 0;
     const names = [];
@@ -839,6 +920,7 @@
       const listEntries = catalog.entries;
       for (let i = 0; i < listEntries.length; i++) {
         const entry = listEntries[i];
+        entryLocations.set(entry, {catalog: c, index: i});
         const index = entries.length;
         entries.push(entry);
         if (entry.status === 'fuzzy') {
@@ -847,6 +929,20 @@
           buckets.translated.push(index);
         } else {
           buckets.untranslated.push(index);
+        }
+      }
+      const restored = drafts[c];
+      if (Array.isArray(restored)) {
+        for (const revision of restored) {
+          if (!Array.isArray(revision) || revision.length !== 2) continue;
+          const [index, values] = revision;
+          const entry = listEntries[index];
+          if (!Number.isInteger(index) || !entry || !Array.isArray(values) ||
+              values.length !== Math.max(entry.slots, entry.msgstr.length, 1) ||
+              !values.every((value) => typeof value === 'string')) continue;
+          if (values.some((value, slot) => value !== (entry.msgstr[slot] || ''))) {
+            edits.set(entry, values.slice());
+          }
         }
       }
     }
@@ -927,6 +1023,8 @@
     }
 
     progress.hidden = false;
+    draftVersion++;
+    draftStatus('loading', 'ファイルと一時保存した下書きを読み込んでいます…');
     progress.removeAttribute('value');
     list.setAttribute('aria-busy', 'true');
     result.textContent = '読み込んでいます';
@@ -954,6 +1052,12 @@
         if (!recognizable) {
           skipped.push(file.name);
         } else {
+          try {
+            parsed.draftId = await DraftStore.identify(file.webkitRelativePath || file.name, text);
+          } catch {
+            // Storage must never prevent a PO file from being opened or exported.
+            parsed.draftId = null;
+          }
           catalogs.push(parsed);
         }
       } catch {
@@ -967,9 +1071,22 @@
     list.removeAttribute('aria-busy');
     if (!catalogs.length) {
       result.textContent = 'PO として読めた文字列がありませんでした。';
+      draftStatus('error', 'ファイルを読み込めませんでした。前の一時保存は残っています。');
       return;
     }
-    adoptCatalogs(catalogs, skipped);
+    let drafts = [];
+    try {
+      drafts = await DraftStore.readDrafts(catalogs);
+    } catch {
+      // Continue with imported translations if browser storage is unavailable.
+    }
+    if (generation !== loadGeneration) return;
+    adoptCatalogs(catalogs, skipped, drafts);
+    draftBaseline = null;
+    const count = edits.size;
+    trackDraftSave(ensureDraftBaseline(), count
+      ? `下書き ${count.toLocaleString('ja-JP')} 件を復元しました。このブラウザーに一時保存済みです。`
+      : 'このブラウザーに自動保存します。ファイルと下書きは外部へ送信しません。');
   }
 
   /**
@@ -1255,9 +1372,29 @@
   });
   resizeObserver.observe(list);
 
+  async function resumeSession() {
+    const generation = loadGeneration;
+    try {
+      const records = await DraftStore.restore();
+      if (generation !== loadGeneration) return;
+      const valid = records.length && records.every(({catalog}) => catalog &&
+        typeof catalog.draftId === 'string' && Array.isArray(catalog.entries) &&
+        catalog.headers && typeof catalog.filename === 'string');
+      if (valid) {
+        adoptCatalogs(records.map(({catalog}) => catalog), [], records.map(({edits}) => edits));
+        draftBaseline = Promise.resolve();
+        draftStatus('restored', `前回の作業を復元しました（下書き ${edits.size.toLocaleString('ja-JP')} 件）。このブラウザーに一時保存済みです。`);
+        return;
+      }
+    } catch {
+      // An unavailable or damaged draft store must not block the editor.
+    }
+    if (generation === loadGeneration) loadSample();
+  }
+
   if (!globalThis.PoParser) {
     result.textContent = '読み込み機能を起動できませんでした。ページを再読み込みしてください。';
   } else {
-    loadSample();
+    resumeSession();
   }
 })();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { Button, SearchControl, RadioControl, Modal } from '@wordpress/components';
@@ -49,6 +49,31 @@ function Help() {
     </Modal>}
   </>;
 }
+function DraftStatus() {
+  const [status, setStatus] = useState({state: 'loading', message: '一時保存を確認しています', canClear: false});
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => {
+    const update = (event) => setStatus(event.detail);
+    document.addEventListener('translation-draft-status', update);
+    return () => document.removeEventListener('translation-draft-status', update);
+  }, []);
+  return <div className="draft-bar">
+    <p id="draft-status" role="status" data-state={status.state}>{status.message}</p>
+    <Button variant="tertiary" size="small" disabled={!status.canClear}
+      onClick={() => setConfirm(true)}>一時保存をすべて削除</Button>
+    {confirm && <Modal title="一時保存をすべて削除" onRequestClose={() => setConfirm(false)}>
+      <p>このブラウザーに保存したファイルと下書きを削除し、開いているファイルの変更を取り消します。</p>
+      <p>次に編集すると自動保存を再開します。書き出した PO ファイルはそのまま残ります。</p>
+      <div className="draft-dialog-actions">
+        <Button variant="secondary" onClick={() => setConfirm(false)}>キャンセル</Button>
+        <Button variant="primary" isDestructive onClick={() => {
+          document.dispatchEvent(new Event('translation-clear-drafts'));
+          setConfirm(false);
+        }}>削除して変更を取り消す</Button>
+      </div>
+    </Modal>}
+  </div>;
+}
 mount('wp-actions', <>
   <Button id="export" variant="secondary" disabled __next40pxDefaultSize>変更を書き出す</Button>
   <Button variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO を開く</Button>
@@ -58,3 +83,4 @@ mount('wp-submit', <Button type="submit" variant="secondary" __next40pxDefaultSi
 mount('wp-filters', <Filters />);
 mount('wp-help', <Help />);
 mount('wp-sample', <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>);
+mount('wp-drafts', <DraftStatus />);

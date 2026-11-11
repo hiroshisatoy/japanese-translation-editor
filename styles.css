@@ -579,3 +579,17 @@ kbd {
 .status-control .components-radio-control__group-wrapper {
   flex-direction: row !important;
 }
+
+.draft-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.draft-bar p { margin: 0; }
+.draft-bar [data-state="error"] { color: var(--seal); }
+.draft-dialog-actions { display: flex; flex-wrap: wrap; gap: 12px; }

@@ -9,6 +9,7 @@ for (const path of [
   'styles.css',
   'app.js',
   'po-parser.js',
+  'draft-store.js',
   'dist',
   'test/sample.po',
 ]) {

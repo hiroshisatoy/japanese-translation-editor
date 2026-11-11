@@ -1,0 +1,138 @@
+'use strict';
+
+// Keep imported catalogs separate from small, frequently updated draft records.
+(function attachDraftStore() {
+  let database;
+  let writes = Promise.resolve();
+
+  function open() {
+    if (!database) {
+      database = new Promise((resolve, reject) => {
+        let blocked = false;
+        const request = indexedDB.open('japanese-translation-editor-drafts', 1);
+        request.onupgradeneeded = () => {
+          for (const name of ['catalogs', 'drafts', 'meta']) {
+            request.result.createObjectStore(name);
+          }
+        };
+        request.onerror = () => reject(request.error);
+        request.onblocked = () => {
+          blocked = true;
+          reject(new Error('Storage upgrade blocked'));
+        };
+        request.onsuccess = () => {
+          const db = request.result;
+          if (blocked) {
+            db.close();
+            return;
+          }
+          db.onversionchange = () => {
+            db.close();
+            database = null;
+          };
+          resolve(db);
+        };
+      }).catch((error) => {
+        database = null;
+        throw error;
+      });
+    }
+    return database;
+  }
+
+  async function transaction(names, mode, execute) {
+    const db = await open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(names, mode);
+      let result;
+      tx.oncomplete = () => resolve(result);
+      tx.onabort = () => reject(tx.error || new Error('Storage transaction aborted'));
+      // Requests are queued synchronously, without awaiting inside a transaction.
+      try {
+        result = execute(tx);
+      } catch (error) {
+        tx.abort();
+        reject(error);
+      }
+    });
+  }
+
+  function write(names, execute) {
+    const operation = writes.then(() => transaction(names, 'readwrite', execute));
+    // A failed write must not prevent subsequent retries or deletion.
+    writes = operation.catch(() => {});
+    return operation;
+  }
+
+  async function identify(filename, text) {
+    const bytes = new TextEncoder().encode(JSON.stringify([filename, text]));
+    const hash = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function readDrafts(catalogs) {
+    await writes;
+    return transaction(['drafts'], 'readonly', (tx) => {
+      const records = catalogs.map(() => []);
+      catalogs.forEach((catalog, index) => {
+        if (!catalog.draftId) return;
+        tx.objectStore('drafts').get(catalog.draftId).onsuccess = (event) => {
+          records[index] = event.target.result?.edits || [];
+        };
+      });
+      return records;
+    });
+  }
+
+  function remember(catalogs) {
+    return write(['catalogs', 'meta'], (tx) => {
+      for (const catalog of catalogs) {
+        if (!catalog.draftId) throw new Error('Missing catalog identity');
+        tx.objectStore('catalogs').put(catalog, catalog.draftId);
+      }
+      tx.objectStore('meta').put(catalogs.map((catalog) => catalog.draftId), 'session');
+    });
+  }
+
+  function save(catalogs, revisions) {
+    // Copy before queuing so later keystrokes cannot mutate an in-flight save.
+    const snapshot = revisions.map((edits) => edits.map(([index, values]) => [index, values.slice()]));
+    const ids = catalogs.map((catalog) => catalog.draftId);
+    return write(['drafts'], (tx) => {
+      ids.forEach((id, index) => {
+        if (!id) throw new Error('Missing catalog identity');
+        tx.objectStore('drafts').put({edits: snapshot[index]}, id);
+      });
+    });
+  }
+
+  async function restore() {
+    await writes;
+    return transaction(['meta', 'catalogs', 'drafts'], 'readonly', (tx) => {
+      const records = [];
+      tx.objectStore('meta').get('session').onsuccess = (event) => {
+        const ids = event.target.result;
+        if (!Array.isArray(ids)) return;
+        ids.forEach((id, index) => {
+          const record = {catalog: null, edits: []};
+          records[index] = record;
+          tx.objectStore('catalogs').get(id).onsuccess = (loaded) => {
+            record.catalog = loaded.target.result;
+          };
+          tx.objectStore('drafts').get(id).onsuccess = (loaded) => {
+            record.edits = loaded.target.result?.edits || [];
+          };
+        });
+      };
+      return records;
+    });
+  }
+
+  function clear() {
+    return write(['meta', 'catalogs', 'drafts'], (tx) => {
+      for (const name of ['meta', 'catalogs', 'drafts']) tx.objectStore(name).clear();
+    });
+  }
+
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear};
+})();
