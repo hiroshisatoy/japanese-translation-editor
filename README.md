@@ -26,7 +26,7 @@ PO / POT の原文・取り込んだ訳文・変更後の訳文を比較して�
 
 ## UI の変更
 
-`npm ci` のあと `npm run build` を実行します。`ui.jsx` は WordPress 公式の `@wordpress/components` 44.0.0 を使用しています。ビルド済みの `dist/wp-ui.js` と `dist/wp-ui.css` を配布物に含めてください。実行時に CDN 接続は不要です。
+`npm ci` のあと `npm run build` を実行します。`ui.jsx` は WordPress 公式の `@wordpress/components` 44.0.0 と、実験段階の `@wordpress/ui` 0.26.0、デザイントークンの `@wordpress/theme` 4.0.0 を使用しています。ビルド済みの `dist/wp-ui.js` と `dist/wp-ui.css` を配布物に含めてください。実行時に CDN 接続は不要です。
 
 検索・状態選択・ボタン・ヘルプダイアログを React が管理し、PO の解析、編集、書き出し、仮想一覧は既存の `app.js` と `po-parser.js` が処理します。
 

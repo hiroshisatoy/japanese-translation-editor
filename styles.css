@@ -36,6 +36,8 @@ body {
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   margin: 0;
   height: 100dvh;
   display: flex;
@@ -547,11 +549,11 @@ kbd {
 #wp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 #wp-search { flex: 1 1 20rem; min-width: 0; }
 #wp-filters { flex-basis: 100%; padding: 12px 0 6px; }
-.status-control { margin: 0; padding: 0; border: 0; }
-.status-control .components-radio-control__group-wrapper {
-  display: flex; flex-flow: row wrap; gap: 12px 24px;
-}
-.status-control .components-radio-control__option { gap: 8px; }
+.status-control { margin: 0; }
+/* RadioGroup's Stack sets its direction inline. */
+.status-control fieldset { display: flex; flex-flow: row wrap; flex-direction: row !important; gap: 12px 24px; margin: 0; padding: 0; border: 0; }
+.status-option { display: inline-flex; align-items: center; gap: 8px; }
+.status-option label { cursor: pointer; }
 .count { font-size: 12px; }
 .result { font-size: 13px; margin: 6px 0 12px; }
 .empty { margin: 8vh auto 0; padding: 32px; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; }
@@ -565,19 +567,6 @@ kbd {
   .brand-actions { width: 100%; margin-inline-start: 0; }
   #wp-search { flex-basis: 100%; }
   .empty { margin-top: 24px; padding: 24px; }
-}
-.status-control .components-radio-control__option {
-  width: auto;
-  flex: 0 0 auto;
-}
-.status-control > div {
-  display: flex;
-  flex-flow: row wrap;
-  gap: 12px 24px;
-}
-/* RadioControl's Stack sets column direction inline. */
-.status-control .components-radio-control__group-wrapper {
-  flex-direction: row !important;
 }
 
 .draft-bar {

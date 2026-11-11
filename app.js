@@ -791,8 +791,8 @@
   }
 
   function selectedStatus() {
-    const checked = finder.querySelector('input[name="status"]:checked');
-    return checked ? checked.value : 'all';
+    const checked = finder.querySelector('[role="radio"][aria-checked="true"]');
+    return checked ? checked.dataset.status : 'all';
   }
 
   function updateCounts() {
@@ -906,6 +906,12 @@
    * @param {string[]} skipped
    */
   function adoptCatalogs(catalogs, skipped, drafts = []) {
+    // A queued virtual-list redraw must not use indexes from the previous file.
+    hits = [];
+    heights = new Float64Array(0);
+    prefix = new Float64Array(1);
+    drawnStart = -1;
+    drawnEnd = -1;
     entries = [];
     loadedCatalogs = catalogs;
     edits.clear();

@@ -61,9 +61,9 @@ async function load(page, files) {
     await expect(area(page, 3)).toHaveValue('別ファイルの下書き');
     await expect(area(page, 4)).toHaveValue('保存する');
     await expect(page.locator('#count-changed')).toHaveText('4');
-    await page.locator('input[value="changed"]').check();
+    await page.getByRole('radio', {name: /変更あり/}).check();
     await expect(page.locator('.row')).toHaveCount(4);
-    await page.locator('input[value="all"]').check();
+    await page.getByRole('radio', {name: /すべて/}).check();
     const downloads = [];
     page.on('download', (download) => downloads.push(download));
     await page.locator('#export').click();

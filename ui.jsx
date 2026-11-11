@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
-import { Button, SearchControl, RadioControl, Modal } from '@wordpress/components';
+import { Button, SearchControl, Modal } from '@wordpress/components';
+import { Field, Fieldset, Radio, RadioGroup, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
 import '@wordpress/components/build-style/style.css';
+import '@wordpress/theme/design-tokens.css';
 
 // Mount controls before app.js binds the catalog and virtual-list handlers.
 function mount(id, content) {
@@ -25,15 +27,18 @@ const statuses = [
 ];
 function Filters() {
   const [selected, setSelected] = useState('all');
-  return <RadioControl className="status-control" id="status" name="status" label="翻訳の状態"
-    hideLabelFromVision selected={selected}
-    options={statuses.map(([value, label]) => ({value,
-      label: <>{label} <span className="count" id={`count-${value}`} /></>,
-    }))}
-    onChange={(next) => {
+  return <Field.Root name="status" className="status-control">
+    <Fieldset.Root render={<RadioGroup value={selected} onValueChange={(next) => {
       flushSync(() => setSelected(next));
       document.dispatchEvent(new Event('translation-search'));
-    }} />;
+    }} />}>
+      <Fieldset.Legend hideFromVision>翻訳の状態</Fieldset.Legend>
+      {statuses.map(([value, label]) => <Field.Item className="status-option" key={value}>
+        <Radio value={value} data-status={value} />
+        <Field.Label variant="plain">{label} <span className="count" id={`count-${value}`} /></Field.Label>
+      </Field.Item>)}
+    </Fieldset.Root>
+  </Field.Root>;
 }
 function Help() {
   const [open, setOpen] = useState(false);
@@ -50,6 +55,7 @@ function Help() {
   </>;
 }
 function DraftStatus() {
+  useEnableWpCompatOverlaySlot();
   const [status, setStatus] = useState({state: 'loading', message: '一時保存を確認しています', canClear: false});
   const [confirm, setConfirm] = useState(false);
   useEffect(() => {
