@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>翻訳ビューア</title>
+  <link rel="stylesheet" href="dist/wp-ui.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="toolbar">
+    <div class="frame">
+      <div class="brand-row">
+        <h1 id="app-title">翻訳ビューア</h1>
+        <p id="catalog" class="meta"></p>
+        <div class="brand-actions">
+          <progress id="load-progress" hidden aria-label="読み込みの進み具合"></progress>
+          <div id="wp-actions"></div>
+          <input id="file" class="file-input" type="file" name="file" aria-label="PO ファイルを選択" accept=".po,.pot,text/plain" multiple>
+        </div>
+      </div>
+      <search aria-labelledby="app-title">
+        <form id="finder" action="#finder" method="get">
+          <div class="find-row">
+            <div id="wp-search"></div>
+            <div id="wp-submit"></div>
+            <div id="wp-help"></div>
+            <div id="wp-filters"></div>
+          </div>
+          <p id="result" class="result" role="status"></p>
+        </form>
+      </search>
+      <div class="colhead" id="colhead" hidden aria-hidden="true">
+        <span>原文</span>
+        <span>取り込んだ文</span>
+        <span>変更後の文</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="list" id="list">
+    <div class="frame">
+      <div class="empty" id="empty">
+        <p class="lead">PO ファイルを開くと、原文、取り込んだ文、変更後の文を並べて表示します。</p>
+        <p>複数のファイルやフォルダを、この画面へまとめてドロップできます。<kbd>/</kbd> で検索欄に移ります。</p>
+        <div id="wp-sample"></div>
+      </div>
+      <p class="nomatch" id="nomatch" hidden>条件に合う訳文はありません。語句を短くするか、状態を「すべて」に戻してください。</p>
+      <div class="spacer" id="spacer" hidden>
+        <div class="window" id="window" role="list" aria-label="翻訳の一覧"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="veil" id="veil" hidden>PO ファイルをドロップして開く</div>
+  <noscript><p>このツールは JavaScript で PO ファイルを読みます。ブラウザの JavaScript を有効にしてください。</p></noscript>
+  <script src="po-parser.js" defer></script>
+  <script src="dist/wp-ui.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

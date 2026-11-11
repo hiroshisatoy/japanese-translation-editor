@@ -1,0 +1,60 @@
+import React, { useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { flushSync } from 'react-dom';
+import { Button, SearchControl, RadioControl, Modal } from '@wordpress/components';
+import '@wordpress/components/build-style/style.css';
+
+// Mount controls before app.js binds the catalog and virtual-list handlers.
+function mount(id, content) {
+  flushSync(() => createRoot(document.getElementById(id)).render(content));
+}
+
+function Search() {
+  const [value, setValue] = useState('');
+  return <SearchControl id="q" name="q" label="翻訳を検索" value={value}
+    placeholder="例: 保存　原文:Settings" spellCheck={false}
+    autoCapitalize="none" enterKeyHint="search" aria-controls="window"
+    onChange={(next) => {
+      flushSync(() => setValue(next));
+      document.dispatchEvent(new Event('translation-search'));
+    }} />;
+}
+const statuses = [
+  ['all', 'すべて'], ['untranslated', '未翻訳'], ['fuzzy', '要確認'],
+  ['translated', '翻訳済み'], ['changed', '変更あり'],
+];
+function Filters() {
+  const [selected, setSelected] = useState('all');
+  return <RadioControl className="status-control" id="status" name="status" label="翻訳の状態"
+    hideLabelFromVision selected={selected}
+    options={statuses.map(([value, label]) => ({value,
+      label: <>{label} <span className="count" id={`count-${value}`} /></>,
+    }))}
+    onChange={(next) => {
+      flushSync(() => setSelected(next));
+      document.dispatchEvent(new Event('translation-search'));
+    }} />;
+}
+function Help() {
+  const [open, setOpen] = useState(false);
+  return <><Button variant="tertiary" onClick={() => setOpen(true)}>検索の書き方</Button>
+    {open && <Modal title="検索の書き方" onRequestClose={() => setOpen(false)}>
+      <p>半角スペースで区切ると、すべての語句を含む翻訳を検索します。引用符で句をまとめられます。</p>
+      <p>検索する範囲を指定できます。</p>
+      <dl>{[['原文:', '英語の原文'], ['訳文:', '取り込んだ訳文'], ['変更:', '編集した訳文'],
+        ['文脈:', '文字列の文脈'], ['参照:', '参照ファイル']].map(([key, text]) =>
+        <div key={key}><dt><code>{key}</code></dt><dd>{text}</dd></div>)}</dl>
+      <p>例: <code>原文:Settings</code> / <code>訳文:"変更を保存"</code></p>
+      <Button variant="primary" onClick={() => setOpen(false)}>閉じる</Button>
+    </Modal>}
+  </>;
+}
+mount('wp-actions', <>
+  <Button id="export" variant="secondary" disabled __next40pxDefaultSize>変更を書き出す</Button>
+  <Button variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO を開く</Button>
+</>);
+mount('wp-search', <Search />);
+mount('wp-submit', <Button type="submit" variant="secondary" __next40pxDefaultSize>検索</Button>);
+mount('wp-filters', <Filters />);
+mount('wp-help', <Help />);
+mount('wp-sample', <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>);

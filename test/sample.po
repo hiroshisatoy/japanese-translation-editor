@@ -1,0 +1,47 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: 見本カタログ\n"
+"Language: ja\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. ボタンのラベル
+#: wp-admin/edit.php:120 wp-admin/post.php:40
+msgid "Save changes"
+msgstr "変更を保存"
+
+#: wp-admin/options.php:18
+msgctxt "settings screen"
+msgid "Settings"
+msgstr "設定"
+
+#, fuzzy
+#| msgid "Older title"
+#: wp-admin/about.php:12
+msgid "What's new"
+msgstr "新着情報"
+
+#. %s はサイト名
+#, php-format
+#: wp-login.php:88
+msgid "Log in to %s"
+msgstr ""
+
+#: wp-includes/comment.php:30
+msgid "One comment"
+msgid_plural "%s comments"
+msgstr[0] "%s 件のコメント"
+
+#. 複数行の説明
+#: wp-admin/setup.php:4
+msgid ""
+"Welcome to the editor.\n"
+"Keep the placeholders."
+msgstr ""
+"エディタへようこそ。\n"
+"プレースホルダはそのまま残します。"
+
+msgid "Save \"changes\""
+msgstr "変更を\\保存"
+
+#~ msgid "gone"
+#~ msgstr "廃止"
