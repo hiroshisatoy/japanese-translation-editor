@@ -550,6 +550,10 @@ kbd {
 #wp-search { flex: 1 1 20rem; min-width: 0; }
 #wp-filters { flex-basis: 100%; padding: 12px 0 6px; }
 .status-control { margin: 0; }
+/* Keep Stack's wrap fallback where balanced wrapping is unsupported. */
+@supports (flex-wrap: balance) {
+  .status-control [role="radiogroup"] { flex-wrap: balance !important; }
+}
 .status-option { display: inline-flex; align-items: center; gap: 8px; }
 .status-option label { cursor: pointer; }
 .count { font-size: 12px; }
