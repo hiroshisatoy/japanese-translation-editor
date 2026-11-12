@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { Button, SearchControl, Modal } from '@wordpress/components';
-import { Field, Fieldset, Radio, RadioGroup, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
+import { Field, Fieldset, Radio, RadioGroup, Stack, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
 import '@wordpress/components/build-style/style.css';
 import '@wordpress/theme/design-tokens.css';
 
@@ -28,7 +28,7 @@ const statuses = [
 function Filters() {
   const [selected, setSelected] = useState('all');
   return <Field.Root name="status" className="status-control">
-    <Fieldset.Root render={<RadioGroup value={selected} onValueChange={(next) => {
+    <Fieldset.Root render={<RadioGroup render={<Stack direction="row" wrap="wrap" gap="lg" />} value={selected} onValueChange={(next) => {
       flushSync(() => setSelected(next));
       document.dispatchEvent(new Event('translation-search'));
     }} />}>

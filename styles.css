@@ -550,8 +550,6 @@ kbd {
 #wp-search { flex: 1 1 20rem; min-width: 0; }
 #wp-filters { flex-basis: 100%; padding: 12px 0 6px; }
 .status-control { margin: 0; }
-/* RadioGroup's Stack sets its direction inline. */
-.status-control fieldset { display: flex; flex-flow: row wrap; flex-direction: row !important; gap: 12px 24px; margin: 0; padding: 0; border: 0; }
 .status-option { display: inline-flex; align-items: center; gap: 8px; }
 .status-option label { cursor: pointer; }
 .count { font-size: 12px; }
