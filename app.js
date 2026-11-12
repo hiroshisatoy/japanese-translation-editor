@@ -344,7 +344,7 @@
     const sourceBody = el('div', 'body', source);
     const target = el('div', 'target', pair);
     const targetLabel = el('p', 'col-label', target);
-    targetLabel.textContent = '取り込んだ文';
+    targetLabel.textContent = '訳文';
     const targetBody = el('div', 'body', target);
     const revised = el('div', 'revised-col', pair);
     const revisedBody = el('div', 'body', revised);
