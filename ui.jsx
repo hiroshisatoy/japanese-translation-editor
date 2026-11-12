@@ -103,8 +103,12 @@ function Actions() {
     if (warning && !dialog.current.open) dialog.current.showModal();
   }, [warning]);
   return <>
-  <Button id="export" variant="secondary" disabled __next40pxDefaultSize>変更を書き出す</Button>
-  <Button id="open-file" variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO を開く</Button>
+  <Button id="export" variant="secondary" aria-label="変更を書き出す" disabled __next40pxDefaultSize>
+    <span className="action-full" aria-hidden="true">変更を書き出す</span><span className="action-short" aria-hidden="true">書き出す</span>
+  </Button>
+  <Button id="open-file" variant="primary" aria-label="PO を開く" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>
+    <span className="action-full" aria-hidden="true">PO を開く</span><span className="action-short" aria-hidden="true">開く</span>
+  </Button>
   <Button id="close-file" variant="tertiary" icon={close} label="ファイルを閉じる" showTooltip disabled __next40pxDefaultSize />
   <dialog ref={dialog} aria-labelledby="close-warning-title" onClose={() => setWarning(false)}>
     <h2 id="close-warning-title">下書きを保存できませんでした</h2>

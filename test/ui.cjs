@@ -84,12 +84,17 @@ const fs = require('node:fs/promises');
       const openRect = document.getElementById('open-file').getBoundingClientRect();
       const closeRect = document.getElementById('close-file').getBoundingClientRect();
       const metaRect = meta.getBoundingClientRect();
+      const titleRect = document.getElementById('app-title').getBoundingClientRect();
       return {
         viewportOverflow: document.documentElement.scrollWidth > innerWidth,
         metadataScrolls: meta.scrollWidth > meta.clientWidth,
         spanTops: Array.from(meta.children, (child) => child.getBoundingClientRect().top),
         metadataTop: metaRect.top,
+        metadataCenter: (metaRect.top + metaRect.bottom) / 2,
+        metadataWidth: metaRect.width,
+        titleCenter: (titleRect.top + titleRect.bottom) / 2,
         exportTop: exportRect.top, exportBottom: exportRect.bottom,
+        exportCenter: (exportRect.top + exportRect.bottom) / 2,
         openTop: openRect.top, openBottom: openRect.bottom,
         openRight: openRect.right, closeTop: closeRect.top, closeRight: closeRect.right,
       };
@@ -99,7 +104,9 @@ const fs = require('node:fs/promises');
     expect(Math.max(...layout.spanTops) - Math.min(...layout.spanTops)).toBeLessThan(1);
     expect(Math.abs(layout.exportTop - layout.openTop)).toBeLessThan(1);
     expect(Math.abs(layout.openTop - layout.closeTop)).toBeLessThan(1);
-    expect(Math.max(layout.exportBottom, layout.openBottom)).toBeLessThanOrEqual(layout.metadataTop);
+    expect(Math.abs(layout.metadataCenter - layout.exportCenter)).toBeLessThan(1);
+    expect(Math.abs(layout.titleCenter - layout.exportCenter)).toBeLessThan(1);
+    expect(layout.metadataWidth).toBeGreaterThan(40);
     expect(layout.openRight).toBeLessThanOrEqual(width);
     expect(layout.closeRight).toBeLessThanOrEqual(width);
   }
@@ -108,6 +115,26 @@ const fs = require('node:fs/promises');
   await page.keyboard.press('ArrowRight');
   await expect.poll(() => catalog.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
   if(errors.length) throw Error(errors.join('\n'));
+  const touchPage = await browser.newPage({viewport: {width: 320, height: 844}, isMobile: true, hasTouch: true});
+  await touchPage.goto(process.env.TEST_BASE_URL || 'http://127.0.0.1:8080');
+  await touchPage.locator('#sample').click();
+  await expect(touchPage.locator('#catalog')).toBeVisible();
+  const touchLayout = await touchPage.evaluate(() => ({
+    buttons: [...document.querySelectorAll('#wp-actions > button')].map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {width: rect.width, height: rect.height};
+    }),
+    metadataWidth: document.getElementById('catalog').getBoundingClientRect().width,
+    viewportOverflow: document.documentElement.scrollWidth > innerWidth,
+  }));
+  expect(touchLayout.buttons).toHaveLength(3);
+  for (const button of touchLayout.buttons) {
+    expect(button.width).toBeGreaterThanOrEqual(44);
+    expect(button.height).toBeGreaterThanOrEqual(44);
+  }
+  expect(touchLayout.metadataWidth).toBeGreaterThan(40);
+  expect(touchLayout.viewportOverflow).toBe(false);
+  await touchPage.close();
   console.log({initial,download:download.suggestedFilename(),checks:'Search, clear, filters, editing, export, modal, mobile passed'});
   await browser.close();
 })().catch(e=>{console.error(e);process.exit(1)});
