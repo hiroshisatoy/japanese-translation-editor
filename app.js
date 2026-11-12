@@ -1191,14 +1191,24 @@
     loadSample();
   });
 
+  function exportTimestamp(date) {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}` +
+      `${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  }
+
   exportButton.addEventListener('click', () => {
+    const timestamp = exportTimestamp(new Date());
+    const status = selectedStatus();
+    const filter = status === 'all' ? 'All' : status;
     for (let i = 0; i < loadedCatalogs.length; i++) {
       const catalog = loadedCatalogs[i];
       const blob = new Blob([serializeCatalog(catalog)], {type: 'text/plain;charset=utf-8'});
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = catalog.filename || 'translations.po';
+      const basename = (catalog.filename || 'translations').replace(/\.pot?$/i, '') || 'translations';
+      link.download = `${timestamp}_${basename}_${filter}.po`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
     }

@@ -68,6 +68,9 @@ async function load(page, files) {
     page.on('download', (download) => downloads.push(download));
     await page.locator('#export').click();
     await expect.poll(() => downloads.length).toBe(2);
+    assert.match(downloads[0].suggestedFilename(), /^\d{14}_alpha_All\.po$/);
+    assert.match(downloads[1].suggestedFilename(), /^\d{14}_beta_All\.po$/);
+    assert.equal(downloads[0].suggestedFilename().slice(0, 14), downloads[1].suggestedFilename().slice(0, 14));
     const exported = await fs.readFile(await downloads[0].path(), 'utf8');
     assert.ok(exported.includes('msgstr "ツールバーの下書き"'));
     assert.ok(exported.includes('msgstr[1] "%s 個の下書き"'));
@@ -131,6 +134,10 @@ async function load(page, files) {
     await expect(area(page, 0)).toHaveValue('削除後の新しい下書き');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     await page.screenshot({path: '/tmp/translation-editor-drafts-mobile.png'});
+    await load(page, fixture('日本語.POT'));
+    const potDownload = page.waitForEvent('download');
+    await page.locator('#export').click();
+    assert.match((await potDownload).suggestedFilename(), /^\d{14}_日本語_All\.po$/);
     assert.deepEqual(errors, []);
     await context.close();
     console.log('PASS: reload/tab recovery, multiple files, contexts/plurals/empty values, file identity, export, revert, deletion, mobile');

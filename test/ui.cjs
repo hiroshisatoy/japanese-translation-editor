@@ -1,7 +1,9 @@
 const { chromium, expect } = require('@playwright/test');
+const fs = require('node:fs/promises');
 (async () => {
   const browser = await chromium.launch({headless:true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH});
-  const page = await browser.newPage({viewport:{width:1280,height:900}});
+  const page = await browser.newPage({viewport:{width:1280,height:900}, timezoneId:'Asia/Tokyo'});
+  await page.clock.setFixedTime(new Date('2026-11-12T03:04:05Z'));
   const errors=[]; page.on('pageerror', e=>errors.push(e.message));
   await page.goto(process.env.TEST_BASE_URL || 'http://127.0.0.1:8080');
   await page.waitForLoadState('networkidle');
@@ -33,6 +35,20 @@ const { chromium, expect } = require('@playwright/test');
   const downloadPromise=page.waitForEvent('download');
   await page.locator('#export').click();
   const download=await downloadPromise;
+  expect(download.suggestedFilename()).toBe('20261112120405_sample_All.po');
+  for (const [label, suffix] of [['未翻訳', 'untranslated'], ['要確認', 'fuzzy'], ['翻訳済み', 'translated'], ['変更あり', 'changed']]) {
+    await page.getByRole('radio', {name: new RegExp(label)}).check();
+    const pendingDownload = page.waitForEvent('download');
+    await page.locator('#export').click();
+    const filteredDownload = await pendingDownload;
+    expect(filteredDownload.suggestedFilename()).toBe(`20261112120405_sample_${suffix}.po`);
+    if (suffix === 'untranslated') {
+      const content = await fs.readFile(await filteredDownload.path(), 'utf8');
+      expect(content).toContain('検証用の訳文');
+      expect(content).toContain('Log in to %s');
+    }
+  }
+  await page.getByRole('radio', {name: /すべて/}).check();
   await page.getByRole('button',{name:'検索の書き方'}).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.press('Escape');
