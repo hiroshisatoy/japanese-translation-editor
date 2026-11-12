@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { Button, SearchControl, Modal } from '@wordpress/components';
-import { Field, Fieldset, Radio, RadioGroup, Stack, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
+import { CheckboxControl, Field, Fieldset, Radio, RadioGroup, Stack, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
 import { close, cog } from '@wordpress/icons';
 import '@wordpress/components/build-style/style.css';
 import '@wordpress/theme/design-tokens.css';
@@ -133,13 +133,19 @@ function Settings() {
   const [scope, setScope] = useState('all');
   const [busy, setBusy] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const [exportSettings, setExportSettings] = useState({exportChangedOnly: false, state: 'loading'});
   const settingsDialog = useRef(null);
   const confirmDialog = useRef(null);
   const settingsClose = useRef(null);
   useLayoutEffect(() => {
     const update = (event) => setInfo(event.detail);
+    const updateExport = (event) => setExportSettings(event.detail);
     document.addEventListener('translation-draft-info', update);
-    return () => document.removeEventListener('translation-draft-info', update);
+    document.addEventListener('translation-export-settings', updateExport);
+    return () => {
+      document.removeEventListener('translation-draft-info', update);
+      document.removeEventListener('translation-export-settings', updateExport);
+    };
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -147,7 +153,10 @@ function Settings() {
     document.dispatchEvent(new Event('translation-request-draft-info'));
   }, [open, status.state, status.message]);
   const summary = info?.summary;
-  const canClear = Boolean(summary && (summary.files || summary.changes));
+  const canClear = Boolean(summary && (summary.files || summary.changes || summary.settings));
+  const changeExport = (checked) => document.dispatchEvent(new CustomEvent('translation-change-export-settings', {
+    detail: {exportChangedOnly: checked},
+  }));
   const categories = {
     current: {
       title: '現在開いているファイルを削除',
@@ -161,9 +170,13 @@ function Settings() {
       title: '下書きだけを削除',
       description: 'すべてのファイルの下書きを削除し、開いているファイルの変更を取り込んだ訳文に戻します。ファイル自体は残ります。',
     },
+    settings: {
+      title: '設定情報を削除',
+      description: '保存した書き出し設定を削除し、すべての項目を書き出す初期設定に戻します。ファイルと下書きは残ります。',
+    },
     all: {
       title: '一時保存をすべて削除',
-      description: '保存したすべてのファイルと下書きを削除し、開いているファイルの変更を取り込んだ訳文に戻します。次に編集すると自動保存を再開します。',
+      description: '保存したすべてのファイル・下書き・設定情報を削除し、開いているファイルの変更を取り込んだ訳文に戻します。書き出し設定も初期設定に戻ります。次に編集すると自動保存を再開します。',
     },
   };
   const askDelete = (nextScope) => {
@@ -194,6 +207,24 @@ function Settings() {
       <div className="settings-heading"><h2 id="settings-title">設定</h2>
         <form method="dialog"><Button ref={settingsClose} variant="tertiary" icon={close} label="設定を閉じる" __next40pxDefaultSize type="submit" autoFocus /></form>
       </div>
+      <section aria-labelledby="export-settings-title">
+        <h3 id="export-settings-title">書き出し</h3>
+        <CheckboxControl className="export-setting" name="export-changed-only"
+          label="変更した項目だけを書き出す"
+          description="読み込んだ訳文から変更した項目だけを含めます。元に戻した項目は含めません。"
+          checked={exportSettings.exportChangedOnly} disabled={exportSettings.state === 'loading'}
+          onCheckedChange={changeExport} />
+        <p>有効にすると、検索や画面の絞り込みにかかわらず変更した項目を書き出します。変更がないファイルは書き出しません。</p>
+        <p id="export-settings-status" role="status" data-state={exportSettings.state}>
+          {exportSettings.state === 'loading' ? '設定を確認しています…'
+            : exportSettings.state === 'saving' ? '設定を保存しています…'
+              : exportSettings.state === 'save-error' ? '設定を保存できませんでした。この画面では選択した設定で書き出します。'
+                : exportSettings.state === 'read-error' ? '保存した設定を確認できませんでした。すべての項目を書き出す設定になっています。'
+                  : '設定はこのブラウザーに保存されます。'}
+        </p>
+        {exportSettings.state === 'save-error' && <Button variant="secondary"
+          onClick={() => changeExport(exportSettings.exportChangedOnly)}>設定の保存を再試行</Button>}
+      </section>
       <section aria-labelledby="storage-title">
         <h3 id="storage-title">一時保存</h3>
         <p>ファイルと下書きをこのブラウザーに自動保存します。</p>
@@ -202,13 +233,14 @@ function Settings() {
           <div><dt>保存したファイル</dt><dd>{summary ? `${summary.files.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
           <div><dt>保存した下書き</dt><dd>{summary ? `${summary.changes.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
           <div><dt>現在開いているファイル</dt><dd>{summary ? `${summary.currentFiles.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
-          <div><dt>設定情報</dt><dd>現在は保存していません</dd></div>
+          <div><dt>設定情報</dt><dd>{summary ? (summary.settings ? '書き出し設定を保存済み' : '現在は保存していません') : info?.error ? '確認できません' : '確認中…'}</dd></div>
         </dl>
         <div className="storage-actions">
           <Button variant="secondary" isDestructive disabled={!summary?.currentFiles} onClick={() => askDelete('current')}>現在開いているファイルを削除</Button>
           <Button variant="secondary" isDestructive disabled={!summary || !(summary.files - summary.currentFiles || summary.changes - summary.currentChanges)} onClick={() => askDelete('other')}>ほかの保存済みファイルを削除</Button>
           <Button variant="secondary" isDestructive disabled={!summary?.changes} onClick={() => askDelete('drafts')}>下書きだけを削除</Button>
-        <Button variant="secondary" isDestructive disabled={!canClear}
+          <Button variant="secondary" isDestructive disabled={!summary?.settings} onClick={() => askDelete('settings')}>設定情報を削除</Button>
+          <Button variant="secondary" isDestructive disabled={!canClear}
             onClick={() => askDelete('all')}>一時保存をすべて削除</Button>
         </div>
       </section>
@@ -222,7 +254,7 @@ function Settings() {
       <form method="dialog" className="draft-dialog-actions">
         <Button variant="secondary" type="submit" disabled={busy} autoFocus>キャンセル</Button>
         <Button variant="primary" isDestructive type="button" disabled={busy} onClick={deleteData}>
-          {scope === 'other' ? '削除する' : '削除して変更を取り消す'}
+          {scope === 'other' || scope === 'settings' ? '削除する' : '削除して変更を取り消す'}
         </Button>
       </form>
     </dialog>

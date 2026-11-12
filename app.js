@@ -131,6 +131,45 @@
   let currentStorageDeleted = false;
   let summaryGeneration = 0;
   let savedFilesGeneration = 0;
+  let exportChangedOnly = false;
+  let settingsReady = false;
+  let settingsVersion = 0;
+
+  function publishExportSettings(state = 'ready') {
+    document.dispatchEvent(new CustomEvent('translation-export-settings', {
+      detail: {exportChangedOnly, state},
+    }));
+    updateExportButton();
+  }
+
+  async function restoreExportSettings() {
+    let state = 'ready';
+    try {
+      exportChangedOnly = (await DraftStore.readSettings()).exportChangedOnly;
+    } catch {
+      state = 'read-error';
+    }
+    settingsReady = true;
+    publishExportSettings(state);
+  }
+
+  document.addEventListener('translation-change-export-settings', async (event) => {
+    if (!settingsReady || deletingDrafts) return;
+    exportChangedOnly = event.detail.exportChangedOnly === true;
+    const version = ++settingsVersion;
+    pendingDraftSaves++;
+    publishExportSettings('saving');
+    try {
+      await DraftStore.saveSettings(exportChangedOnly);
+      if (version === settingsVersion) publishExportSettings('saved');
+    } catch {
+      // The selected mode still applies to this page when persistence fails.
+      if (version === settingsVersion) publishExportSettings('save-error');
+    } finally {
+      pendingDraftSaves--;
+      document.dispatchEvent(new Event('translation-request-draft-info'));
+    }
+  });
 
   async function refreshSavedFiles() {
     if (catalogLoaded) return;
@@ -348,7 +387,7 @@
       openButton.disabled = false;
       closeButton.disabled = loadedCatalogs.length === 0;
       settingsButton.disabled = false;
-      exportButton.disabled = entries.length === 0;
+      updateExportButton();
       if (warn) document.dispatchEvent(new Event('translation-close-warning'));
       if (didClose) {
         document.getElementById('open-empty').focus();
@@ -368,11 +407,16 @@
     }
     deletingDrafts = true;
     pendingDraftSaves++;
-    const changesCurrent = scope !== 'other';
+    const changesCurrent = scope !== 'other' && scope !== 'settings';
     if (changesCurrent) draftVersion++;
     const ids = loadedCatalogs.map((catalog) => catalog.draftId);
     try {
       await DraftStore.remove(scope, ids);
+      if (scope === 'settings' || scope === 'all') {
+        settingsVersion++;
+        exportChangedOnly = false;
+        publishExportSettings();
+      }
       if (changesCurrent) {
         edits.clear();
         updateChangedCount();
@@ -392,8 +436,10 @@
       complete(true);
       refreshSavedFiles();
     } catch {
-      if (edits.size) draftSaveFailed = true;
-      draftStatus('error', '一時保存を削除できませんでした。変更を残すには PO を書き出してください。', true);
+      if (scope !== 'settings') {
+        if (edits.size) draftSaveFailed = true;
+        draftStatus('error', '一時保存を削除できませんでした。変更を残すには PO を書き出してください。', true);
+      }
       complete(false);
     } finally {
       pendingDraftSaves--;
@@ -1019,12 +1065,21 @@
       const key = keys[i];
       countNodes[key].textContent = entries.length ? counts[key].toLocaleString('ja-JP') : '';
     }
-    exportButton.disabled = entries.length === 0;
+    updateExportButton();
     closeButton.disabled = loadedCatalogs.length === 0 || closingFile;
   }
 
   function updateChangedCount() {
     countNodes.changed.textContent = entries.length ? edits.size.toLocaleString('ja-JP') : '';
+    updateExportButton();
+  }
+
+  function updateExportButton() {
+    exportButton.disabled = !settingsReady || closingFile || entries.length === 0 ||
+      (exportChangedOnly && edits.size === 0);
+    exportButton.title = exportChangedOnly
+      ? (edits.size ? `変更した ${edits.size.toLocaleString('ja-JP')} 件だけを書き出します` : '書き出す変更がありません')
+      : 'すべての翻訳項目を書き出します';
   }
 
   /**
@@ -1416,12 +1471,14 @@
   }
 
   exportButton.addEventListener('click', () => {
+    if (exportButton.disabled) return;
     const timestamp = exportTimestamp(new Date());
     const status = selectedStatus();
-    const filter = status === 'all' ? 'All' : status;
+    const filter = exportChangedOnly ? 'changed' : status === 'all' ? 'All' : status;
     for (let i = 0; i < loadedCatalogs.length; i++) {
       const catalog = loadedCatalogs[i];
-      const blob = new Blob([serializeCatalog(catalog)], {type: 'text/plain;charset=utf-8'});
+      if (exportChangedOnly && !catalog.entries.some((entry) => edits.has(entry))) continue;
+      const blob = new Blob([serializeCatalog(catalog, exportChangedOnly)], {type: 'text/plain;charset=utf-8'});
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -1503,9 +1560,10 @@
 
   /**
    * @param {Object} catalog
+   * @param {boolean} changedOnly
    * @return {string}
    */
-  function serializeCatalog(catalog) {
+  function serializeCatalog(catalog, changedOnly = false) {
     const lines = ['msgid ""', 'msgstr ""'];
     const headers = catalog.headers || {};
     const keys = Object.keys(headers);
@@ -1518,6 +1576,7 @@
     }
     lines.push('');
     for (let i = 0; i < catalog.entries.length; i++) {
+      if (changedOnly && !edits.has(catalog.entries[i])) continue;
       writePoEntry(lines, catalog.entries[i]);
       lines.push('');
     }
@@ -1641,6 +1700,7 @@
   if (!globalThis.PoParser) {
     result.textContent = '読み込み機能を起動できませんでした。ページを再読み込みしてください。';
   } else {
+    restoreExportSettings();
     resumeSession().finally(refreshSavedFiles);
   }
 })();

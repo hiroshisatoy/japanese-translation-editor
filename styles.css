@@ -649,6 +649,8 @@ dialog h2 { margin-top: 0; font-size: 1.125rem; }
 .settings-heading h2 { margin: 0; }
 .settings-dialog h3 { font-size: 1rem; margin: 24px 0 8px; }
 .settings-dialog section > p { color: var(--muted); font-size: 14px; }
+.export-setting { margin-block: 14px; }
+.export-setting label { display: inline-flex; align-items: center; min-block-size: 48px; padding-block: 14px; margin-block: -14px; cursor: pointer; }
 .storage-details { margin: 20px 0; border-block: 1px solid var(--line); }
 .storage-details > div { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 12px; padding: 10px 0; font-size: 13px; }
 .storage-details > div + div { border-block-start: 1px solid var(--line); }

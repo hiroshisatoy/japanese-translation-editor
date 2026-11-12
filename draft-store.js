@@ -178,6 +178,23 @@
     });
   }
 
+  async function readSettings() {
+    await writes;
+    return transaction(['meta'], 'readonly', (tx) => {
+      const settings = {exportChangedOnly: false};
+      tx.objectStore('meta').get('settings').onsuccess = (event) => {
+        settings.exportChangedOnly = event.target.result?.exportChangedOnly === true;
+      };
+      return settings;
+    });
+  }
+
+  function saveSettings(exportChangedOnly) {
+    return write(['meta'], (tx) => {
+      tx.objectStore('meta').put({exportChangedOnly}, 'settings');
+    });
+  }
+
   async function hasSavedData() {
     await writes;
     const result = await transaction(['catalogs'], 'readonly', (tx) => {
@@ -192,7 +209,7 @@
 
   function remove(scope, currentIds) {
     const active = new Set(currentIds.filter(Boolean));
-    if (!['current', 'other', 'drafts', 'all'].includes(scope)) {
+    if (!['current', 'other', 'drafts', 'settings', 'all'].includes(scope)) {
       return Promise.reject(new Error('Invalid deletion scope'));
     }
     return write(['meta', 'catalogs', 'drafts'], (tx) => {
@@ -202,6 +219,10 @@
       }
       if (scope === 'drafts') {
         tx.objectStore('drafts').clear();
+        return;
+      }
+      if (scope === 'settings') {
+        tx.objectStore('meta').delete('settings');
         return;
       }
       const shouldDelete = (id) => scope === 'current' ? active.has(id) : !active.has(id);
@@ -225,9 +246,12 @@
 
   async function getSummary(currentIds = []) {
     await writes;
-    return transaction(['catalogs', 'drafts'], 'readonly', (tx) => {
+    return transaction(['catalogs', 'drafts', 'meta'], 'readonly', (tx) => {
       const active = new Set(currentIds.filter(Boolean));
-      const summary = {files: 0, changes: 0, currentFiles: 0, currentChanges: 0};
+      const summary = {files: 0, changes: 0, currentFiles: 0, currentChanges: 0, settings: false};
+      tx.objectStore('meta').get('settings').onsuccess = (event) => {
+        summary.settings = event.target.result !== undefined;
+      };
       const files = tx.objectStore('catalogs').openKeyCursor();
       files.onsuccess = (event) => {
         const cursor = event.target.result;
@@ -250,5 +274,5 @@
     });
   }
 
-  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, listSaved, readSaved, forgetSession, hasSavedData, getSummary, remove};
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, listSaved, readSaved, forgetSession, readSettings, saveSettings, hasSavedData, getSummary, remove};
 })();

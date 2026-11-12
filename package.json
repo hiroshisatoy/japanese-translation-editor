@@ -5,7 +5,7 @@
     "build": "esbuild ui.jsx --bundle --minify --outfile=dist/wp-ui.js --loader:.woff2=file --loader:.woff=file --loader:.ttf=file",
     "build:pages": "npm run build && node scripts/build-pages.mjs",
     "start": "python3 -m http.server 8080 --bind 127.0.0.1",
-    "test": "node test/ui.cjs && node test/drafts.cjs"
+    "test": "node test/ui.cjs && node test/drafts.cjs && node test/export.cjs"
   },
   "dependencies": {
     "@wordpress/components": "44.0.0",
