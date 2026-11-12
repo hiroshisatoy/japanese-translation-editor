@@ -81,7 +81,8 @@ const fs = require('node:fs/promises');
     const layout = await page.evaluate(() => {
       const meta = document.getElementById('catalog');
       const exportRect = document.getElementById('export').getBoundingClientRect();
-      const openRect = document.querySelector('#wp-actions button:last-child').getBoundingClientRect();
+      const openRect = document.getElementById('open-file').getBoundingClientRect();
+      const closeRect = document.getElementById('close-file').getBoundingClientRect();
       const metaRect = meta.getBoundingClientRect();
       return {
         viewportOverflow: document.documentElement.scrollWidth > innerWidth,
@@ -90,15 +91,17 @@ const fs = require('node:fs/promises');
         metadataTop: metaRect.top,
         exportTop: exportRect.top, exportBottom: exportRect.bottom,
         openTop: openRect.top, openBottom: openRect.bottom,
-        openRight: openRect.right,
+        openRight: openRect.right, closeTop: closeRect.top, closeRight: closeRect.right,
       };
     });
     expect(layout.viewportOverflow).toBe(false);
     expect(layout.metadataScrolls).toBe(true);
     expect(Math.max(...layout.spanTops) - Math.min(...layout.spanTops)).toBeLessThan(1);
     expect(Math.abs(layout.exportTop - layout.openTop)).toBeLessThan(1);
+    expect(Math.abs(layout.openTop - layout.closeTop)).toBeLessThan(1);
     expect(Math.max(layout.exportBottom, layout.openBottom)).toBeLessThanOrEqual(layout.metadataTop);
     expect(layout.openRight).toBeLessThanOrEqual(width);
+    expect(layout.closeRight).toBeLessThanOrEqual(width);
   }
   await page.screenshot({path:'/tmp/translation-editor-long-header.png'});
   await catalog.focus();

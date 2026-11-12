@@ -134,5 +134,23 @@
     });
   }
 
-  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear};
+  function forgetSession() {
+    return write(['meta'], (tx) => {
+      tx.objectStore('meta').delete('session');
+    });
+  }
+
+  async function hasSavedData() {
+    await writes;
+    const result = await transaction(['catalogs'], 'readonly', (tx) => {
+      const state = {exists: false};
+      tx.objectStore('catalogs').count().onsuccess = (event) => {
+        state.exists = event.target.result > 0;
+      };
+      return state;
+    });
+    return result.exists;
+  }
+
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear, forgetSession, hasSavedData};
 })();

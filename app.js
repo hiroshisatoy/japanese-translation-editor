@@ -85,6 +85,8 @@
   const veil = document.getElementById('veil');
   const sampleButton = document.getElementById('sample');
   const exportButton = document.getElementById('export');
+  const openButton = document.getElementById('open-file');
+  const closeButton = document.getElementById('close-file');
   const countNodes = {
     all: document.getElementById('count-all'),
     untranslated: document.getElementById('count-untranslated'),
@@ -123,6 +125,7 @@
   let draftSaveFailed = false;
   let draftVersion = 0;
   let pendingDraftSaves = 0;
+  let closingFile = false;
 
   function draftStatus(state, message, canClear = loadedCatalogs.length > 0) {
     document.dispatchEvent(new CustomEvent('translation-draft-status', {
@@ -180,6 +183,102 @@
     }
     return revisions;
   }
+
+  async function closeFiles(force = false) {
+    if (closingFile || !loadedCatalogs.length) return;
+    closingFile = true;
+    loadGeneration++;
+    searchGeneration++;
+    draftVersion++;
+    list.inert = true;
+    finder.inert = true;
+    document.getElementById('wp-drafts').inert = true;
+    fileInput.disabled = true;
+    openButton.disabled = true;
+    closeButton.disabled = true;
+    exportButton.disabled = true;
+    progress.hidden = true;
+    list.removeAttribute('aria-busy');
+    let warn = false;
+    let sessionCleared = false;
+    let saved = false;
+    let didClose = false;
+    try {
+      if (!force) {
+        try {
+          draftStatus('saving', '下書きを保存してファイルを閉じています…');
+          const baseline = ensureDraftBaseline();
+          const changes = DraftStore.save(loadedCatalogs, draftRevisions());
+          await Promise.all([baseline, changes]);
+          saved = true;
+        } catch {
+          if (edits.size) {
+            draftError();
+            warn = true;
+            return;
+          }
+        }
+      }
+      try {
+        await DraftStore.forgetSession();
+        sessionCleared = true;
+      } catch {
+        // If the last-session marker cannot be cleared, closing is still safe
+        // after saving (or after the user explicitly discards unsaved changes).
+      }
+      entries = [];
+      loadedCatalogs = [];
+      edits.clear();
+      entryLocations = new WeakMap();
+      buckets = {untranslated: [], fuzzy: [], translated: []};
+      catalogLoaded = false;
+      loadWarning = '';
+      obsoleteCount = 0;
+      showFile = false;
+      hits = [];
+      heights = new Float64Array(0);
+      prefix = new Float64Array(1);
+      drawnStart = -1;
+      drawnEnd = -1;
+      previousDone = false;
+      previousHits = null;
+      previousQuery = '';
+      activeTokens = [];
+      draftBaseline = null;
+      draftSaveFailed = false;
+      catalog.replaceChildren();
+      catalog.hidden = true;
+      windowEl.replaceChildren();
+      spacer.hidden = true;
+      colhead.hidden = true;
+      nomatch.hidden = true;
+      empty.hidden = false;
+      list.scrollTop = 0;
+      result.textContent = '';
+      document.title = '翻訳ビューア';
+      document.dispatchEvent(new Event('translation-reset-controls'));
+      updateCounts();
+      draftStatus(sessionCleared ? 'ready' : 'error', sessionCleared
+        ? (saved ? 'ファイルを閉じました。下書きはこのブラウザーに残っています。' : 'ファイルを閉じました。')
+        : 'ファイルを閉じました。一時保存を更新できなかったため、再読み込み時に以前のファイルが表示される場合があります。',
+      sessionCleared && (saved || force));
+      didClose = true;
+    } finally {
+      closingFile = false;
+      list.inert = false;
+      finder.inert = false;
+      document.getElementById('wp-drafts').inert = false;
+      fileInput.disabled = false;
+      openButton.disabled = false;
+      closeButton.disabled = loadedCatalogs.length === 0;
+      exportButton.disabled = entries.length === 0;
+      if (warn) document.dispatchEvent(new Event('translation-close-warning'));
+      if (didClose) document.getElementById('open-empty').focus();
+    }
+  }
+
+  closeButton.addEventListener('click', () => closeFiles());
+  document.addEventListener('translation-force-close', () => closeFiles(true));
 
   document.addEventListener('translation-clear-drafts', () => {
     draftBaseline = null;
@@ -809,6 +908,7 @@
       countNodes[key].textContent = entries.length ? counts[key].toLocaleString('ja-JP') : '';
     }
     exportButton.disabled = entries.length === 0;
+    closeButton.disabled = loadedCatalogs.length === 0 || closingFile;
   }
 
   function updateChangedCount() {
@@ -1008,6 +1108,7 @@
    * @param {File[]} files
    */
   async function loadFiles(files) {
+    if (closingFile) return;
     const generation = ++loadGeneration;
     searchGeneration++;
     const poFiles = [];
@@ -1412,8 +1513,15 @@
       }
       return;
     }
-    if (generation === loadGeneration) {
-      draftStatus('ready', 'PO ファイルを開くか、見本を表示してください。', false);
+    try {
+      const hasSavedData = await DraftStore.hasSavedData();
+      if (generation === loadGeneration) {
+        draftStatus('ready', 'PO ファイルを開くか、見本を表示してください。', hasSavedData);
+      }
+    } catch {
+      if (generation === loadGeneration) {
+        draftStatus('error', '一時保存を確認できませんでした。ファイルは開けます。', false);
+      }
     }
   }
 

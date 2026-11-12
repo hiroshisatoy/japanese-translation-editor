@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { Button, SearchControl, Modal } from '@wordpress/components';
 import { Field, Fieldset, Radio, RadioGroup, Stack, useEnableWpCompatOverlaySlot } from '@wordpress/ui';
+import { close } from '@wordpress/icons';
 import '@wordpress/components/build-style/style.css';
 import '@wordpress/theme/design-tokens.css';
 
@@ -13,6 +14,11 @@ function mount(id, content) {
 
 function Search() {
   const [value, setValue] = useState('');
+  useLayoutEffect(() => {
+    const reset = () => flushSync(() => setValue(''));
+    document.addEventListener('translation-reset-controls', reset);
+    return () => document.removeEventListener('translation-reset-controls', reset);
+  }, []);
   return <SearchControl id="q" name="q" label="翻訳を検索" value={value}
     placeholder="例: 保存　原文:Settings" spellCheck={false}
     autoCapitalize="none" enterKeyHint="search" aria-controls="window"
@@ -27,6 +33,11 @@ const statuses = [
 ];
 function Filters() {
   const [selected, setSelected] = useState('all');
+  useLayoutEffect(() => {
+    const reset = () => flushSync(() => setSelected('all'));
+    document.addEventListener('translation-reset-controls', reset);
+    return () => document.removeEventListener('translation-reset-controls', reset);
+  }, []);
   return <Field.Root name="status" className="status-control">
     <Fieldset.Root render={<RadioGroup render={<Stack direction="row" wrap="wrap" gap="lg" />} value={selected} onValueChange={(next) => {
       flushSync(() => setSelected(next));
@@ -58,7 +69,7 @@ function DraftStatus() {
   useEnableWpCompatOverlaySlot();
   const [status, setStatus] = useState({state: 'loading', message: '一時保存を確認しています', canClear: false});
   const [confirm, setConfirm] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const update = (event) => setStatus(event.detail);
     document.addEventListener('translation-draft-status', update);
     return () => document.removeEventListener('translation-draft-status', update);
@@ -80,16 +91,40 @@ function DraftStatus() {
     </Modal>}
   </div>;
 }
-mount('wp-actions', <>
+function Actions() {
+  const [warning, setWarning] = useState(false);
+  const dialog = useRef(null);
+  useLayoutEffect(() => {
+    const showWarning = () => setWarning(true);
+    document.addEventListener('translation-close-warning', showWarning);
+    return () => document.removeEventListener('translation-close-warning', showWarning);
+  }, []);
+  useEffect(() => {
+    if (warning && !dialog.current.open) dialog.current.showModal();
+  }, [warning]);
+  return <>
   <Button id="export" variant="secondary" disabled __next40pxDefaultSize>変更を書き出す</Button>
-  <Button variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO を開く</Button>
-</>);
+  <Button id="open-file" variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO を開く</Button>
+  <Button id="close-file" variant="tertiary" icon={close} label="ファイルを閉じる" showTooltip disabled __next40pxDefaultSize />
+  <dialog ref={dialog} aria-labelledby="close-warning-title" onClose={() => setWarning(false)}>
+    <h2 id="close-warning-title">下書きを保存できませんでした</h2>
+    <p>このまま閉じると、保存できていない変更が失われます。変更を残すには、戻って PO ファイルを書き出してください。</p>
+    <form method="dialog" className="draft-dialog-actions">
+      <Button variant="secondary" type="submit" autoFocus>戻る</Button>
+      <Button variant="primary" isDestructive type="submit" onClick={() => {
+        document.dispatchEvent(new Event('translation-force-close'));
+      }}>変更を破棄して閉じる</Button>
+    </form>
+  </dialog>
+  </>;
+}
+mount('wp-actions', <Actions />);
 mount('wp-search', <Search />);
 mount('wp-submit', <Button type="submit" variant="secondary" __next40pxDefaultSize>検索</Button>);
 mount('wp-filters', <Filters />);
 mount('wp-help', <Help />);
 mount('wp-sample', <div className="empty-actions">
-  <Button variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO ファイルを開く</Button>
+  <Button id="open-empty" variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO ファイルを開く</Button>
   <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>
 </div>);
 mount('wp-drafts', <DraftStatus />);

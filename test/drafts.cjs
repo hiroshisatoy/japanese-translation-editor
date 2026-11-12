@@ -163,6 +163,12 @@ async function load(page, files) {
     await area(retry, 0).fill('保存失敗後の復旧');
     await expect(retry.locator('#draft-status')).toHaveAttribute('data-state', 'error');
     await expect(area(retry, 0)).toHaveValue('保存失敗後の復旧');
+    await retry.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(retry.getByRole('dialog', {name: '下書きを保存できませんでした'})).toBeVisible();
+    await expect(retry.getByRole('button', {name: '戻る', exact: true})).toBeFocused();
+    await retry.keyboard.press('Escape');
+    await expect(retry.getByRole('dialog')).toHaveCount(0);
+    await expect(area(retry, 0)).toHaveValue('保存失敗後の復旧');
     await retry.evaluate(() => { IDBDatabase.prototype.transaction = window.originalTransaction; });
     await area(retry, 1).fill('別の行も復旧');
     await saved(retry);
@@ -199,6 +205,69 @@ async function load(page, files) {
     await baselineContext.close();
     console.log('PASS: failed baseline cannot be reported as saved, retry restores complete session');
 
+    const closeContext = await browser.newContext({viewport: {width: 390, height: 844}});
+    const closePage = await closeContext.newPage();
+    await closePage.goto(baseURL);
+    await expect(closePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await expect(closePage.getByRole('button', {name: 'ファイルを閉じる'})).toBeDisabled();
+    await load(closePage, [alpha, beta]);
+    await area(closePage, 0).fill('閉じる前の下書き');
+    await area(closePage, 3).fill('別ファイルの下書き');
+    await closePage.getByRole('radio', {name: /変更あり/}).check();
+    await closePage.locator('#q').fill('下書き');
+    await closePage.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(closePage.locator('#empty')).toBeVisible();
+    await expect(closePage.locator('#catalog')).toBeHidden();
+    await expect(closePage.locator('#q')).toHaveValue('');
+    await expect(closePage.getByRole('radio', {name: /すべて/})).toBeChecked();
+    await expect(closePage.locator('#export')).toBeDisabled();
+    await expect(closePage.getByRole('button', {name: 'ファイルを閉じる'})).toBeDisabled();
+    await expect(closePage.locator('#open-empty')).toBeFocused();
+    await closePage.reload();
+    await expect(closePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await expect(closePage.locator('#empty')).toBeVisible();
+    await expect(closePage.getByRole('button', {name: '一時保存をすべて削除'})).toBeEnabled();
+    await load(closePage, [alpha, beta]);
+    await expect(area(closePage, 0)).toHaveValue('閉じる前の下書き');
+    await expect(area(closePage, 3)).toHaveValue('別ファイルの下書き');
+    await closePage.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(closePage.locator('#empty')).toBeVisible();
+    await closePage.getByRole('button', {name: '一時保存をすべて削除'}).click();
+    await closePage.getByRole('button', {name: '削除して変更を取り消す'}).click();
+    await saved(closePage);
+    await closePage.reload();
+    await expect(closePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await expect(closePage.getByRole('button', {name: '一時保存をすべて削除'})).toBeDisabled();
+    await load(closePage, [alpha, beta]);
+    await expect(area(closePage, 0)).toHaveValue('保存');
+    await expect(area(closePage, 3)).toHaveValue('保存');
+    await closeContext.close();
+    console.log('PASS: close saves pending edits, resets the view, and restores drafts when files are reopened');
+
+    const markerContext = await browser.newContext();
+    const markerPage = await markerContext.newPage();
+    await markerPage.goto(baseURL);
+    await expect(markerPage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await load(markerPage, alpha);
+    await area(markerPage, 0).fill('保存済みの下書き');
+    await saved(markerPage);
+    await markerPage.evaluate(() => {
+      const original = IDBObjectStore.prototype.delete;
+      IDBObjectStore.prototype.delete = function(key) {
+        if (this.name === 'meta' && key === 'session') throw new DOMException('Blocked', 'SecurityError');
+        return original.call(this, key);
+      };
+    });
+    await markerPage.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(markerPage.locator('#empty')).toBeVisible();
+    await expect(markerPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');
+    await expect(markerPage.locator('#draft-status')).toContainText('以前のファイルが表示される場合');
+    await markerPage.reload();
+    await saved(markerPage);
+    await expect(area(markerPage, 0)).toHaveValue('保存済みの下書き');
+    await markerContext.close();
+    console.log('PASS: failure to clear the session marker is reported and does not lose saved drafts');
+
     const blocked = await browser.newContext();
     await blocked.addInitScript(() => {
       IDBFactory.prototype.open = () => { throw new DOMException('Storage blocked', 'SecurityError'); };
@@ -215,6 +284,10 @@ async function load(page, files) {
     const download = await downloadPromise;
     const text = await fs.readFile(await download.path(), 'utf8');
     assert.ok(text.includes('保存不可でも編集できる'));
+    await blockedPage.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(blockedPage.getByRole('dialog', {name: '下書きを保存できませんでした'})).toBeVisible();
+    await blockedPage.getByRole('button', {name: '変更を破棄して閉じる'}).click();
+    await expect(blockedPage.locator('#empty')).toBeVisible();
     await blocked.close();
     console.log('PASS: blocked storage preserves editing and PO export');
   } finally {
