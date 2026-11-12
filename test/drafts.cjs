@@ -38,6 +38,15 @@ async function closeSettings(page) {
   await page.getByRole('button', {name: '設定を閉じる'}).click();
   await expect(page.getByRole('dialog', {name: '設定', exact: true})).toBeHidden();
 }
+async function deleteCategory(page, label, confirmLabel = '削除して変更を取り消す') {
+  await page.getByRole('button', {name: label, exact: true}).click();
+  const dialog = page.getByRole('dialog', {name: label, exact: true});
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole('button', {name: 'キャンセル', exact: true})).toBeFocused();
+  await page.getByRole('button', {name: confirmLabel, exact: true}).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('button', {name: '設定を閉じる'})).toBeFocused();
+}
 
 (async () => {
   const browser = await chromium.launch({
@@ -269,6 +278,106 @@ async function closeSettings(page) {
     await expect(area(closePage, 3)).toHaveValue('保存');
     await closeContext.close();
     console.log('PASS: close saves pending edits, resets the view, and restores drafts when files are reopened');
+
+    const scopedContext = await browser.newContext({viewport: {width: 390, height: 844}});
+    const scoped = await scopedContext.newPage();
+    await scoped.goto(baseURL);
+    await expect(scoped.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await load(scoped, alpha);
+    await area(scoped, 0).fill('ファイル A の下書き');
+    await saved(scoped);
+    await scoped.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(scoped.locator('#empty')).toBeVisible();
+    await load(scoped, beta);
+    await area(scoped, 0).fill('ファイル B の下書き');
+    await saved(scoped);
+    await openSettings(scoped);
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('2 件');
+    await expect(scoped.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('2 件');
+    await expect(scoped.locator('.storage-details > div').nth(3).locator('dd')).toHaveText('1 件');
+    await expect(scoped.locator('.storage-details > div').nth(4).locator('dd')).toHaveText('現在は保存していません');
+    await scoped.getByRole('button', {name: 'ほかの保存済みファイルを削除'}).click();
+    await scoped.getByRole('button', {name: 'キャンセル', exact: true}).click();
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('2 件');
+    await deleteCategory(scoped, 'ほかの保存済みファイルを削除', '削除する');
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('1 件');
+    await expect(scoped.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('1 件');
+    await closeSettings(scoped);
+    await expect(area(scoped, 0)).toHaveValue('ファイル B の下書き');
+    await load(scoped, alpha);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await area(scoped, 0).fill('ファイル A の別の下書き');
+    await saved(scoped);
+    await openSettings(scoped);
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('2 件');
+    await deleteCategory(scoped, '現在開いているファイルを削除');
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('1 件');
+    await expect(scoped.locator('.storage-details > div').nth(3).locator('dd')).toHaveText('0 件');
+    await closeSettings(scoped);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await area(scoped, 0).fill('削除後の自動保存');
+    await saved(scoped);
+    await scoped.reload();
+    await saved(scoped);
+    await expect(area(scoped, 0)).toHaveValue('削除後の自動保存');
+    await openSettings(scoped);
+    await deleteCategory(scoped, '現在開いているファイルを削除');
+    await closeSettings(scoped);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await scoped.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(scoped.locator('#empty')).toBeVisible();
+    await scoped.reload();
+    await expect(scoped.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await load(scoped, beta);
+    await expect(area(scoped, 0)).toHaveValue('ファイル B の下書き');
+    await load(scoped, alpha);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await area(scoped, 0).fill('再保存された下書き');
+    await saved(scoped);
+    await openSettings(scoped);
+    await expect(scoped.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('2 件');
+    await deleteCategory(scoped, '下書きだけを削除');
+    await expect(scoped.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('2 件');
+    await expect(scoped.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('0 件');
+    await closeSettings(scoped);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await scoped.reload();
+    await saved(scoped);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await load(scoped, beta);
+    await expect(area(scoped, 0)).toHaveValue('保存');
+    await scopedContext.close();
+    console.log('PASS: current files, other files, and draft-only deletion remain isolated');
+
+    const deletionFailureContext = await browser.newContext();
+    const failedDeletion = await deletionFailureContext.newPage();
+    await failedDeletion.goto(baseURL);
+    await expect(failedDeletion.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await load(failedDeletion, alpha);
+    await area(failedDeletion, 0).fill('削除に失敗しても残す');
+    await saved(failedDeletion);
+    await openSettings(failedDeletion);
+    await failedDeletion.evaluate(() => {
+      window.deleteOriginalTransaction = IDBDatabase.prototype.transaction;
+      IDBDatabase.prototype.transaction = function(names, mode, ...rest) {
+        const tx = window.deleteOriginalTransaction.call(this, names, mode, ...rest);
+        if (mode === 'readwrite' && names.includes('meta') && names.includes('drafts') && names.includes('catalogs')) {
+          queueMicrotask(() => tx.abort());
+        }
+        return tx;
+      };
+    });
+    await failedDeletion.getByRole('button', {name: '現在開いているファイルを削除'}).click();
+    await failedDeletion.getByRole('button', {name: '削除して変更を取り消す'}).click();
+    await expect(failedDeletion.getByRole('alert')).toHaveText('削除できませんでした。もう一度お試しください。');
+    await expect(area(failedDeletion, 0)).toHaveValue('削除に失敗しても残す');
+    await failedDeletion.evaluate(() => { IDBDatabase.prototype.transaction = window.deleteOriginalTransaction; });
+    await failedDeletion.getByRole('button', {name: '削除して変更を取り消す'}).click();
+    await expect(failedDeletion.getByRole('dialog', {name: '現在開いているファイルを削除'})).toBeHidden();
+    await closeSettings(failedDeletion);
+    await expect(area(failedDeletion, 0)).toHaveValue('保存');
+    await deletionFailureContext.close();
+    console.log('PASS: failed scoped deletion leaves edits intact and can be retried');
 
     const markerContext = await browser.newContext();
     const markerPage = await markerContext.newPage();

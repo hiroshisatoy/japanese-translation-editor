@@ -127,12 +127,14 @@
   let draftVersion = 0;
   let pendingDraftSaves = 0;
   let closingFile = false;
+  let deletingDrafts = false;
+  let currentStorageDeleted = false;
   let summaryGeneration = 0;
 
   document.addEventListener('translation-request-draft-info', async () => {
     const generation = ++summaryGeneration;
     try {
-      const summary = await DraftStore.getSummary();
+      const summary = await DraftStore.getSummary(loadedCatalogs.map((catalog) => catalog.draftId));
       if (generation === summaryGeneration) {
         document.dispatchEvent(new CustomEvent('translation-draft-info', {detail: {summary}}));
       }
@@ -186,6 +188,7 @@
   function saveDrafts() {
     // A small draft write succeeding is insufficient if the original file failed
     // to save. Every edit waits for both transactions before claiming success.
+    currentStorageDeleted = false;
     const baseline = ensureDraftBaseline();
     const changes = DraftStore.save(loadedCatalogs, draftRevisions());
     trackDraftSave(Promise.all([baseline, changes]));
@@ -201,7 +204,7 @@
   }
 
   async function closeFiles(force = false) {
-    if (closingFile || !loadedCatalogs.length) return;
+    if (closingFile || deletingDrafts || !loadedCatalogs.length) return;
     closingFile = true;
     loadGeneration++;
     searchGeneration++;
@@ -221,7 +224,7 @@
     let saved = false;
     let didClose = false;
     try {
-      if (!force) {
+      if (!force && !(currentStorageDeleted && edits.size === 0)) {
         try {
           draftStatus('saving', '下書きを保存してファイルを閉じています…');
           const baseline = ensureDraftBaseline();
@@ -262,6 +265,7 @@
       previousQuery = '';
       activeTokens = [];
       draftBaseline = null;
+      currentStorageDeleted = false;
       draftSaveFailed = false;
       catalog.replaceChildren();
       catalog.hidden = true;
@@ -298,13 +302,44 @@
   closeButton.addEventListener('click', () => closeFiles());
   document.addEventListener('translation-force-close', () => closeFiles(true));
 
-  document.addEventListener('translation-clear-drafts', () => {
-    draftBaseline = null;
-    edits.clear();
-    updateChangedCount();
-    previousDone = false;
-    scheduleSearch();
-    trackDraftSave(DraftStore.clear(), '一時保存を削除しました。次に編集すると自動保存します。');
+  document.addEventListener('translation-delete-drafts', async (event) => {
+    const {scope, complete} = event.detail;
+    if (deletingDrafts || closingFile) {
+      complete(false);
+      return;
+    }
+    deletingDrafts = true;
+    pendingDraftSaves++;
+    const changesCurrent = scope !== 'other';
+    if (changesCurrent) draftVersion++;
+    const ids = loadedCatalogs.map((catalog) => catalog.draftId);
+    try {
+      await DraftStore.remove(scope, ids);
+      if (changesCurrent) {
+        edits.clear();
+        updateChangedCount();
+        previousDone = false;
+        scheduleSearch();
+        draftSaveFailed = false;
+        if (scope === 'current' || scope === 'all') {
+          draftBaseline = null;
+          currentStorageDeleted = loadedCatalogs.length > 0;
+        }
+      }
+      if (draftSaveFailed) {
+        draftError();
+      } else {
+        draftStatus('saved', '選択した一時保存を削除しました。', true);
+      }
+      complete(true);
+    } catch {
+      if (edits.size) draftSaveFailed = true;
+      draftStatus('error', '一時保存を削除できませんでした。変更を残すには PO を書き出してください。', true);
+      complete(false);
+    } finally {
+      pendingDraftSaves--;
+      deletingDrafts = false;
+    }
   });
 
   // Warn only while a save is still pending or has failed with unsaved edits.
@@ -1032,6 +1067,7 @@
     drawnEnd = -1;
     entries = [];
     loadedCatalogs = catalogs;
+    currentStorageDeleted = false;
     edits.clear();
     entryLocations = new WeakMap();
     buckets = {untranslated: [], fuzzy: [], translated: []};
@@ -1126,7 +1162,7 @@
    * @param {File[]} files
    */
   async function loadFiles(files) {
-    if (closingFile) return;
+    if (closingFile || deletingDrafts) return;
     const generation = ++loadGeneration;
     searchGeneration++;
     const poFiles = [];

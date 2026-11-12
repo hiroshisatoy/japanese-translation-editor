@@ -128,12 +128,6 @@
     });
   }
 
-  function clear() {
-    return write(['meta', 'catalogs', 'drafts'], (tx) => {
-      for (const name of ['meta', 'catalogs', 'drafts']) tx.objectStore(name).clear();
-    });
-  }
-
   function forgetSession() {
     return write(['meta'], (tx) => {
       tx.objectStore('meta').delete('session');
@@ -152,23 +146,65 @@
     return result.exists;
   }
 
-  async function getSummary() {
+  function remove(scope, currentIds) {
+    const active = new Set(currentIds.filter(Boolean));
+    if (!['current', 'other', 'drafts', 'all'].includes(scope)) {
+      return Promise.reject(new Error('Invalid deletion scope'));
+    }
+    return write(['meta', 'catalogs', 'drafts'], (tx) => {
+      if (scope === 'all') {
+        for (const name of ['meta', 'catalogs', 'drafts']) tx.objectStore(name).clear();
+        return;
+      }
+      if (scope === 'drafts') {
+        tx.objectStore('drafts').clear();
+        return;
+      }
+      const shouldDelete = (id) => scope === 'current' ? active.has(id) : !active.has(id);
+      for (const name of ['catalogs', 'drafts']) {
+        const request = tx.objectStore(name).openKeyCursor();
+        request.onsuccess = (event) => {
+          const cursor = event.target.result;
+          if (!cursor) return;
+          if (shouldDelete(cursor.primaryKey)) tx.objectStore(name).delete(cursor.primaryKey);
+          cursor.continue();
+        };
+      }
+      const meta = tx.objectStore('meta');
+      meta.get('session').onsuccess = (event) => {
+        const session = event.target.result;
+        // Do not leave a last-session marker that references deleted catalogs.
+        if (Array.isArray(session) && session.some(shouldDelete)) meta.delete('session');
+      };
+    });
+  }
+
+  async function getSummary(currentIds = []) {
     await writes;
     return transaction(['catalogs', 'drafts'], 'readonly', (tx) => {
-      const summary = {files: 0, changes: 0};
-      tx.objectStore('catalogs').count().onsuccess = (event) => {
-        summary.files = event.target.result;
+      const active = new Set(currentIds.filter(Boolean));
+      const summary = {files: 0, changes: 0, currentFiles: 0, currentChanges: 0};
+      const files = tx.objectStore('catalogs').openKeyCursor();
+      files.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        summary.files++;
+        if (active.has(cursor.primaryKey)) summary.currentFiles++;
+        cursor.continue();
       };
       const request = tx.objectStore('drafts').openCursor();
       request.onsuccess = (event) => {
         const cursor = event.target.result;
         if (!cursor) return;
-        if (Array.isArray(cursor.value?.edits)) summary.changes += cursor.value.edits.length;
+        if (Array.isArray(cursor.value?.edits)) {
+          summary.changes += cursor.value.edits.length;
+          if (active.has(cursor.primaryKey)) summary.currentChanges += cursor.value.edits.length;
+        }
         cursor.continue();
       };
       return summary;
     });
   }
 
-  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear, forgetSession, hasSavedData, getSummary};
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, forgetSession, hasSavedData, getSummary, remove};
 })();

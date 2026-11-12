@@ -631,6 +631,7 @@ dialog:modal { overscroll-behavior: contain; max-width: min(32rem, calc(100% - 2
 dialog::backdrop { background: rgb(0 0 0 / 0.45); overflow: hidden; overscroll-behavior: contain; }
 dialog h2 { margin-top: 0; font-size: 1.125rem; }
 .settings-dialog { width: 32rem; }
+.settings-dialog:modal { max-height: calc(100dvh - 2rem); overflow: auto; }
 .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .settings-heading h2 { margin: 0; }
 .settings-dialog h3 { font-size: 1rem; margin: 24px 0 8px; }
@@ -640,6 +641,7 @@ dialog h2 { margin-top: 0; font-size: 1.125rem; }
 .storage-details > div + div { border-block-start: 1px solid var(--line); }
 .storage-details dt { color: var(--muted); }
 .storage-details dd { margin: 0; overflow-wrap: anywhere; }
+.storage-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media (max-width: 480px) {
   .storage-details > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 }

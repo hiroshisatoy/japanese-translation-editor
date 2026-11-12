@@ -84,8 +84,12 @@ function Settings() {
   const status = useDraftStatus();
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState(null);
+  const [scope, setScope] = useState('all');
+  const [busy, setBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   const settingsDialog = useRef(null);
   const confirmDialog = useRef(null);
+  const settingsClose = useRef(null);
   useLayoutEffect(() => {
     const update = (event) => setInfo(event.detail);
     document.addEventListener('translation-draft-info', update);
@@ -98,12 +102,51 @@ function Settings() {
   }, [open, status.state, status.message]);
   const summary = info?.summary;
   const canClear = Boolean(summary && (summary.files || summary.changes));
+  const categories = {
+    current: {
+      title: '現在開いているファイルを削除',
+      description: '開いているファイルの一時保存と下書きを削除し、画面の変更を取り込んだ訳文に戻します。次に編集すると自動保存を再開します。',
+    },
+    other: {
+      title: 'ほかの保存済みファイルを削除',
+      description: '現在開いていないファイルと、その下書きを削除します。開いているファイルとその変更は残ります。',
+    },
+    drafts: {
+      title: '下書きだけを削除',
+      description: 'すべてのファイルの下書きを削除し、開いているファイルの変更を取り込んだ訳文に戻します。ファイル自体は残ります。',
+    },
+    all: {
+      title: '一時保存をすべて削除',
+      description: '保存したすべてのファイルと下書きを削除し、開いているファイルの変更を取り込んだ訳文に戻します。次に編集すると自動保存を再開します。',
+    },
+  };
+  const askDelete = (nextScope) => {
+    flushSync(() => { setScope(nextScope); setDeleteError(false); });
+    confirmDialog.current.showModal();
+  };
+  const deleteData = async () => {
+    setBusy(true);
+    setDeleteError(false);
+    const success = await new Promise((complete) => {
+      document.dispatchEvent(new CustomEvent('translation-delete-drafts', {detail: {scope, complete}}));
+    });
+    setBusy(false);
+    if (success) {
+      confirmDialog.current.close();
+      // The invoking deletion control can become disabled after the refresh.
+      settingsClose.current.focus();
+      setInfo(null);
+      document.dispatchEvent(new Event('translation-request-draft-info'));
+    } else {
+      setDeleteError(true);
+    }
+  };
   return <>
     <Button id="settings" variant="tertiary" icon={cog} label="設定" showTooltip __next40pxDefaultSize
       onClick={() => { settingsDialog.current.showModal(); setOpen(true); }} />
     <dialog ref={settingsDialog} className="settings-dialog" aria-labelledby="settings-title" onClose={() => setOpen(false)}>
       <div className="settings-heading"><h2 id="settings-title">設定</h2>
-        <form method="dialog"><Button variant="tertiary" icon={close} label="設定を閉じる" __next40pxDefaultSize type="submit" autoFocus /></form>
+        <form method="dialog"><Button ref={settingsClose} variant="tertiary" icon={close} label="設定を閉じる" __next40pxDefaultSize type="submit" autoFocus /></form>
       </div>
       <section aria-labelledby="storage-title">
         <h3 id="storage-title">一時保存</h3>
@@ -112,20 +155,29 @@ function Settings() {
           <div><dt>保存状態</dt><dd>{status.message}</dd></div>
           <div><dt>保存したファイル</dt><dd>{summary ? `${summary.files.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
           <div><dt>保存した下書き</dt><dd>{summary ? `${summary.changes.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
+          <div><dt>現在開いているファイル</dt><dd>{summary ? `${summary.currentFiles.toLocaleString('ja-JP')} 件` : info?.error ? '確認できません' : '確認中…'}</dd></div>
+          <div><dt>設定情報</dt><dd>現在は保存していません</dd></div>
         </dl>
+        <div className="storage-actions">
+          <Button variant="secondary" isDestructive disabled={!summary?.currentFiles} onClick={() => askDelete('current')}>現在開いているファイルを削除</Button>
+          <Button variant="secondary" isDestructive disabled={!summary || !(summary.files - summary.currentFiles || summary.changes - summary.currentChanges)} onClick={() => askDelete('other')}>ほかの保存済みファイルを削除</Button>
+          <Button variant="secondary" isDestructive disabled={!summary?.changes} onClick={() => askDelete('drafts')}>下書きだけを削除</Button>
         <Button variant="secondary" isDestructive disabled={!canClear}
-          onClick={() => confirmDialog.current.showModal()}>一時保存をすべて削除</Button>
+            onClick={() => askDelete('all')}>一時保存をすべて削除</Button>
+        </div>
       </section>
     </dialog>
-    <dialog ref={confirmDialog} aria-labelledby="clear-drafts-title">
-      <h2 id="clear-drafts-title">一時保存をすべて削除</h2>
-      <p>このブラウザーに保存したファイルと下書きを削除し、開いているファイルの変更を取り消します。</p>
-      <p>次に編集すると自動保存を再開します。書き出した PO ファイルはそのまま残ります。</p>
+    <dialog ref={confirmDialog} aria-labelledby="clear-drafts-title" onCancel={(event) => { if (busy) event.preventDefault(); }}>
+      <h2 id="clear-drafts-title">{categories[scope].title}</h2>
+      <p>{categories[scope].description}</p>
+      <p>書き出した PO ファイルはそのまま残ります。</p>
+      {deleteError && <p role="alert">削除できませんでした。もう一度お試しください。</p>}
+      {busy && <p role="status">削除しています…</p>}
       <form method="dialog" className="draft-dialog-actions">
-        <Button variant="secondary" type="submit" autoFocus>キャンセル</Button>
-        <Button variant="primary" isDestructive type="submit" onClick={() => {
-          document.dispatchEvent(new Event('translation-clear-drafts'));
-        }}>削除して変更を取り消す</Button>
+        <Button variant="secondary" type="submit" disabled={busy} autoFocus>キャンセル</Button>
+        <Button variant="primary" isDestructive type="button" disabled={busy} onClick={deleteData}>
+          {scope === 'other' ? '削除する' : '削除して変更を取り消す'}
+        </Button>
       </form>
     </dialog>
   </>;
