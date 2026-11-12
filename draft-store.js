@@ -128,6 +128,50 @@
     });
   }
 
+  async function listSaved() {
+    await writes;
+    return transaction(['catalogs', 'drafts'], 'readonly', (tx) => {
+      const records = [];
+      // Read one catalog at a time; retain only the small display summaries.
+      // Existing v1 records need no migration or invented save timestamps.
+      tx.objectStore('catalogs').openCursor().onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        const catalog = cursor.value;
+        if (typeof catalog?.filename === 'string' && Array.isArray(catalog.entries)) {
+          const record = {
+            id: cursor.primaryKey,
+            filename: catalog.filename,
+            project: catalog.headers?.['Project-Id-Version'] || '',
+            language: catalog.headers?.Language || '',
+            entries: catalog.entries.length,
+            changes: 0,
+          };
+          records.push(record);
+          tx.objectStore('drafts').get(cursor.primaryKey).onsuccess = (loaded) => {
+            record.changes = loaded.target.result?.edits?.length || 0;
+          };
+        }
+        cursor.continue();
+      };
+      return records;
+    });
+  }
+
+  async function readSaved(id) {
+    await writes;
+    return transaction(['catalogs', 'drafts'], 'readonly', (tx) => {
+      const record = {catalog: null, edits: []};
+      tx.objectStore('catalogs').get(id).onsuccess = (event) => {
+        record.catalog = event.target.result;
+      };
+      tx.objectStore('drafts').get(id).onsuccess = (event) => {
+        record.edits = event.target.result?.edits || [];
+      };
+      return record;
+    });
+  }
+
   function forgetSession() {
     return write(['meta'], (tx) => {
       tx.objectStore('meta').delete('session');
@@ -206,5 +250,5 @@
     });
   }
 
-  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, forgetSession, hasSavedData, getSummary, remove};
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, listSaved, readSaved, forgetSession, hasSavedData, getSummary, remove};
 })();

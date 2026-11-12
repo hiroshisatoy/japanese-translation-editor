@@ -601,6 +601,19 @@ kbd {
 .empty .lead { font-size: 22px; font-weight: 500; }
 .empty p + p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
 .empty-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.saved-files { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); font-size: 13px; }
+.saved-files h2 { margin: 0 0 8px; font-size: 16px; }
+.saved-files-help { color: var(--muted); }
+.saved-file-list { list-style: none; margin: 16px 0 0; padding: 0; }
+.saved-file { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-top: 1px solid var(--line); }
+.saved-file-info { flex: 1; min-inline-size: 0; }
+.saved-file-name, .saved-file-project { white-space: nowrap; overflow-x: auto; padding-block: 2px; }
+.saved-file-name { font-weight: 600; }
+.saved-file-project, .saved-file-id { color: var(--muted); font-size: 12px; }
+.saved-file-counts { margin-top: 6px; }
+.saved-file-id { margin-top: 4px; }
+.saved-file > button { flex-shrink: 0; }
+.saved-file-name:focus-visible, .saved-file-project:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .components-button { font-family: inherit; }
 .components-modal__content { font-size: 14px; line-height: 1.8; }
 .components-modal__content dl > div { display: flex; gap: 16px; }

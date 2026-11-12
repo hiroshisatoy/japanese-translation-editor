@@ -130,6 +130,61 @@
   let deletingDrafts = false;
   let currentStorageDeleted = false;
   let summaryGeneration = 0;
+  let savedFilesGeneration = 0;
+
+  async function refreshSavedFiles() {
+    if (catalogLoaded) return;
+    const generation = ++savedFilesGeneration;
+    const publish = (detail) => {
+      if (generation === savedFilesGeneration) {
+        document.dispatchEvent(new CustomEvent('translation-saved-files', {detail}));
+      }
+    };
+    publish({state: 'loading', files: []});
+    try {
+      const files = await DraftStore.listSaved();
+      files.sort((a, b) => a.filename.localeCompare(b.filename, 'ja') ||
+        a.project.localeCompare(b.project, 'ja') || a.id.localeCompare(b.id));
+      publish({state: 'ready', files});
+    } catch {
+      publish({state: 'error', files: []});
+    }
+  }
+
+  document.addEventListener('translation-request-saved-files', refreshSavedFiles);
+  document.addEventListener('translation-open-saved-file', async (event) => {
+    const {id, complete} = event.detail;
+    if (catalogLoaded || closingFile || deletingDrafts) {
+      complete();
+      return;
+    }
+    const generation = ++loadGeneration;
+    searchGeneration++;
+    let message = '';
+    try {
+      const {catalog, edits: revisions} = await DraftStore.readSaved(id);
+      if (generation !== loadGeneration) return;
+      if (!catalog || catalog.draftId !== id || !Array.isArray(catalog.entries) ||
+          !catalog.headers || typeof catalog.filename !== 'string') {
+        throw new Error('Saved file is missing or invalid');
+      }
+      document.dispatchEvent(new Event('translation-reset-controls'));
+      progress.hidden = true;
+      list.removeAttribute('aria-busy');
+      list.scrollTop = 0;
+      adoptCatalogs([catalog], [], [revisions]);
+      draftBaseline = null;
+      trackDraftSave(ensureDraftBaseline(), `下書き ${edits.size.toLocaleString('ja-JP')} 件を復元しました。`);
+      queryInput.focus();
+    } catch {
+      if (generation === loadGeneration) {
+        await refreshSavedFiles();
+        message = '保存済みのファイルを開けませんでした。削除されていないか確認し、もう一度お試しください。';
+      }
+    } finally {
+      complete(message);
+    }
+  });
 
   document.addEventListener('translation-request-draft-info', async () => {
     const generation = ++summaryGeneration;
@@ -295,7 +350,10 @@
       settingsButton.disabled = false;
       exportButton.disabled = entries.length === 0;
       if (warn) document.dispatchEvent(new Event('translation-close-warning'));
-      if (didClose) document.getElementById('open-empty').focus();
+      if (didClose) {
+        document.getElementById('open-empty').focus();
+        refreshSavedFiles();
+      }
     }
   }
 
@@ -332,6 +390,7 @@
         draftStatus('saved', '選択した一時保存を削除しました。', true);
       }
       complete(true);
+      refreshSavedFiles();
     } catch {
       if (edits.size) draftSaveFailed = true;
       draftStatus('error', '一時保存を削除できませんでした。変更を残すには PO を書き出してください。', true);
@@ -1582,6 +1641,6 @@
   if (!globalThis.PoParser) {
     result.textContent = '読み込み機能を起動できませんでした。ページを再読み込みしてください。';
   } else {
-    resumeSession();
+    resumeSession().finally(refreshSavedFiles);
   }
 })();

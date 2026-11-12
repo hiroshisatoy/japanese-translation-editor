@@ -174,6 +174,86 @@ async function deleteCategory(page, label, confirmLabel = '削除して変更を
     await context.close();
     console.log('PASS: reload/tab recovery, multiple files, contexts/plurals/empty values, file identity, export, revert, deletion, mobile');
 
+    const libraryContext = await browser.newContext({viewport: {width: 390, height: 844}});
+    const library = await libraryContext.newPage();
+    await library.goto(baseURL);
+    await expect(library.locator('#wp-saved-files')).toContainText('保存済みのファイルはありません');
+    const longName = `${'長いファイル名-'.repeat(18)}.po`;
+    const older = fixture(longName, 'Project 1.0');
+    const newer = fixture(longName, 'Project 2.0');
+    await load(library, older);
+    await area(library, 0).fill('以前のバージョンの下書き');
+    await saved(library);
+    await load(library, newer);
+    await area(library, 1).fill('新しいバージョンの下書き');
+    await saved(library);
+    await library.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    const oldRow = library.locator('.saved-file').filter({hasText: 'Project 1.0'});
+    const newRow = library.locator('.saved-file').filter({hasText: 'Project 2.0'});
+    await expect(library.locator('.saved-file')).toHaveCount(2);
+    await expect(oldRow).toContainText('下書き 1 件');
+    await expect(newRow).toContainText('下書き 1 件');
+    assert.notEqual(await oldRow.locator('.saved-file-id').textContent(), await newRow.locator('.saved-file-id').textContent());
+    await expect(oldRow.locator('.saved-file-name')).toHaveText(longName);
+    for (const width of [390, 320]) {
+      await library.setViewportSize({width, height: 844});
+      assert.equal(await library.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+      assert.ok(await oldRow.locator('.saved-file-name').evaluate((node) => {
+        node.scrollLeft = 100;
+        return node.scrollWidth > node.clientWidth && node.scrollLeft > 0 && getComputedStyle(node).whiteSpace === 'nowrap';
+      }));
+    }
+    await library.screenshot({path: '/tmp/translation-editor-saved-files-mobile.png', fullPage: true});
+    await oldRow.getByRole('button').focus();
+    await library.keyboard.press('Enter');
+    await saved(library);
+    await expect(area(library, 0)).toHaveValue('以前のバージョンの下書き');
+    await expect(library.locator('#q')).toBeFocused();
+    await expect(library.locator('#count-all')).toHaveText('3');
+    await library.reload();
+    await saved(library);
+    await expect(area(library, 0)).toHaveValue('以前のバージョンの下書き');
+    const savedDownload = library.waitForEvent('download');
+    await library.locator('#export').click();
+    assert.ok((await fs.readFile(await (await savedDownload).path(), 'utf8')).includes('以前のバージョンの下書き'));
+    await library.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await newRow.getByRole('button').click();
+    await saved(library);
+    await expect(area(library, 1)).toHaveValue('新しいバージョンの下書き');
+    await expect(area(library, 0)).toHaveValue('保存');
+    await library.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(library.locator('#empty')).toBeVisible();
+    await library.reload();
+    await expect(library.locator('.saved-file')).toHaveCount(2);
+    await openSettings(library);
+    await deleteCategory(library, '下書きだけを削除');
+    await closeSettings(library);
+    await expect(oldRow).toContainText('下書き 0 件');
+    await expect(newRow).toContainText('下書き 0 件');
+
+    // An intervening sample choice wins over a delayed saved-file read.
+    await library.evaluate(() => {
+      const original = DraftStore.readSaved;
+      DraftStore.readSaved = (id) => new Promise((resolve) => {
+        window.finishSavedRead = async () => resolve(await original(id));
+      });
+    });
+    await oldRow.getByRole('button').click();
+    await expect(library.locator('#wp-saved-files')).toContainText('保存済みのファイルを開いています');
+    await library.locator('#sample').click();
+    await saved(library);
+    await library.evaluate(() => window.finishSavedRead());
+    await expect(library.locator('#catalog')).toContainText('sample.po');
+    await library.getByRole('button', {name: 'ファイルを閉じる'}).click();
+    await expect(library.locator('.saved-file')).toHaveCount(3);
+    await openSettings(library);
+    await deleteCategory(library, '一時保存をすべて削除');
+    await closeSettings(library);
+    await expect(library.locator('.saved-file')).toHaveCount(0);
+    await expect(library.locator('#wp-saved-files')).toContainText('保存済みのファイルはありません');
+    await libraryContext.close();
+    console.log('PASS: saved file list, version identity, keyboard reopening, restored export/session, mobile overflow, deletion refresh, pending read cancellation');
+
     // A failed transaction must not be reported as saved; later edits retry all changes.
     const retryContext = await browser.newContext();
     const retry = await retryContext.newPage();
@@ -411,6 +491,9 @@ async function deleteCategory(page, label, confirmLabel = '削除して変更を
     await blockedPage.goto(baseURL);
     await expect(blockedPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');
     await expect(blockedPage.locator('#draft-status')).toBeVisible();
+    await expect(blockedPage.locator('#wp-saved-files')).toContainText('保存済みのファイルを確認できませんでした');
+    await blockedPage.getByRole('button', {name: '再試行', exact: true}).click();
+    await expect(blockedPage.locator('#wp-saved-files')).toContainText('保存済みのファイルを確認できませんでした');
     await openSettings(blockedPage);
     await expect(blockedPage.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('確認できません');
     await expect(blockedPage.getByRole('button', {name: '一時保存をすべて削除'})).toBeDisabled();

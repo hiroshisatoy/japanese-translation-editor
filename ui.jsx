@@ -80,6 +80,52 @@ function DraftStatus() {
   return <p id="draft-status" className="draft-error" role="status" data-state={status.state}
     hidden={status.state !== 'error'}>{status.message}</p>;
 }
+function SavedFiles() {
+  const [info, setInfo] = useState({state: 'loading', files: []});
+  const [opening, setOpening] = useState(null);
+  const [error, setError] = useState('');
+  useLayoutEffect(() => {
+    const update = (event) => {
+      setInfo(event.detail);
+      setError('');
+    };
+    document.addEventListener('translation-saved-files', update);
+    return () => document.removeEventListener('translation-saved-files', update);
+  }, []);
+  const open = (id) => {
+    setOpening(id);
+    setError('');
+    document.dispatchEvent(new CustomEvent('translation-open-saved-file', {
+      detail: {id, complete: (message = '') => { setOpening(null); setError(message); }},
+    }));
+  };
+  return <section className="saved-files" aria-labelledby="saved-files-title">
+    <h2 id="saved-files-title">保存済みのファイル</h2>
+    {info.state === 'loading' && <p role="status">保存済みのファイルを確認しています…</p>}
+    {info.state === 'error' && <>
+      <p role="status">保存済みのファイルを確認できませんでした。</p>
+      <Button variant="secondary" onClick={() => document.dispatchEvent(new Event('translation-request-saved-files'))}>再試行</Button>
+    </>}
+    {info.state === 'ready' && (info.files.length ? <>
+      <p className="saved-files-help">このブラウザーに保存した下書きから作業を再開できます。</p>
+      <ul className="saved-file-list">
+        {info.files.map((file) => <li key={file.id} className="saved-file" data-saved-id={file.id}>
+          <div className="saved-file-info">
+            <div className="saved-file-name" id={`saved-name-${file.id}`} tabIndex={0} role="region" aria-label="保存済みのファイル名">{file.filename}</div>
+            {(file.project || file.language) && <div className="saved-file-project" tabIndex={0} role="region" aria-label="保存済みのプロジェクト情報">{[file.project, file.language].filter(Boolean).join(' · ')}</div>}
+            <div className="saved-file-counts">下書き {file.changes.toLocaleString('ja-JP')} 件 · {file.entries.toLocaleString('ja-JP')} 文字列</div>
+            <div className="saved-file-id" id={`saved-id-${file.id}`}>保存 ID: {file.id.slice(0, 12)}</div>
+          </div>
+          <Button variant="secondary" __next40pxDefaultSize disabled={opening !== null} accessibleWhenDisabled
+            aria-labelledby={`saved-open-${file.id} saved-name-${file.id}`} aria-describedby={`saved-id-${file.id}`}
+            onClick={() => open(file.id)}><span id={`saved-open-${file.id}`}>開く</span></Button>
+        </li>)}
+      </ul>
+    </> : <p>保存済みのファイルはありません。</p>)}
+    {opening !== null && <p role="status">保存済みのファイルを開いています…</p>}
+    {error && <p role="alert">{error}</p>}
+  </section>;
+}
 function Settings() {
   const status = useDraftStatus();
   const [open, setOpen] = useState(false);
@@ -224,3 +270,4 @@ mount('wp-sample', <div className="empty-actions">
   <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>
 </div>);
 mount('wp-drafts', <DraftStatus />);
+mount('wp-saved-files', <SavedFiles />);
