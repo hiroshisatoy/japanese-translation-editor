@@ -13,6 +13,15 @@ const fs = require('node:fs/promises');
   await expect(page.getByRole('button', {name:'PO ファイルを開く', exact:true})).toBeVisible();
   await expect(page.locator('#sample')).toBeVisible();
   await expect(page.locator('#export')).toBeDisabled();
+  await expect(page.locator('#draft-status')).toBeHidden();
+  const settingsButton = page.getByRole('button', {name: '設定', exact: true});
+  await settingsButton.click();
+  await expect(page.getByRole('dialog', {name: '設定', exact: true})).toBeVisible();
+  await expect(page.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('0 件');
+  await expect(page.getByRole('button', {name: '一時保存をすべて削除'})).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', {name: '設定', exact: true})).toBeHidden();
+  await expect(settingsButton).toBeFocused();
   expect(requests.some((url) => url.endsWith('/test/sample.po'))).toBe(false);
   await page.locator('#sample').click();
   await expect(page.locator('#q')).toBeVisible();
@@ -121,7 +130,7 @@ const fs = require('node:fs/promises');
     expect(Math.abs(layout.exportTop - layout.openTop)).toBeLessThan(1);
     expect(Math.abs(layout.openTop - layout.closeTop)).toBeLessThan(1);
     expect(Math.abs(layout.metadataCenter - layout.exportCenter)).toBeLessThan(1);
-    expect(Math.abs(layout.titleCenter - layout.exportCenter)).toBeLessThan(1);
+    if (width > 364) expect(Math.abs(layout.titleCenter - layout.exportCenter)).toBeLessThan(1);
     expect(layout.metadataWidth).toBeGreaterThan(40);
     expect(layout.openRight).toBeLessThanOrEqual(width);
     expect(layout.closeRight).toBeLessThanOrEqual(width);
@@ -143,7 +152,7 @@ const fs = require('node:fs/promises');
     metadataWidth: document.getElementById('catalog').getBoundingClientRect().width,
     viewportOverflow: document.documentElement.scrollWidth > innerWidth,
   }));
-  expect(touchLayout.buttons).toHaveLength(3);
+  expect(touchLayout.buttons).toHaveLength(4);
   for (const button of touchLayout.buttons) {
     expect(button.width).toBeGreaterThanOrEqual(44);
     expect(button.height).toBeGreaterThanOrEqual(44);

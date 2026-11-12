@@ -30,6 +30,14 @@ async function load(page, files) {
   await page.locator('#file').setInputFiles(files);
   await saved(page);
 }
+async function openSettings(page) {
+  await page.getByRole('button', {name: '設定', exact: true}).click();
+  await expect(page.getByRole('dialog', {name: '設定', exact: true})).toBeVisible();
+}
+async function closeSettings(page) {
+  await page.getByRole('button', {name: '設定を閉じる'}).click();
+  await expect(page.getByRole('dialog', {name: '設定', exact: true})).toBeHidden();
+}
 
 (async () => {
   const browser = await chromium.launch({
@@ -57,6 +65,11 @@ async function load(page, files) {
     await area(page, 3).fill('別ファイルの下書き');
     await saved(page);
     await expect(page.locator('#count-changed')).toHaveText('4');
+    await expect(page.locator('#draft-status')).toBeHidden();
+    await openSettings(page);
+    await expect(page.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('2 件');
+    await expect(page.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('4 件');
+    await closeSettings(page);
     await page.reload();
     await saved(page);
     await expect(area(page, 0)).toHaveValue('ツールバーの下書き');
@@ -105,12 +118,18 @@ async function load(page, files) {
     await expect(page.locator('#count-changed')).toHaveText('2');
 
     // Cancel leaves drafts intact; confirm removes every saved catalog and draft.
+    await openSettings(page);
     await page.getByRole('button', {name: '一時保存をすべて削除', exact: true}).click();
+    await expect(page.getByRole('dialog', {name: '一時保存をすべて削除'})).toBeVisible();
+    await expect(page.getByRole('button', {name: 'キャンセル', exact: true})).toBeFocused();
     await page.getByRole('button', {name: 'キャンセル', exact: true}).click();
     await expect(page.locator('#count-changed')).toHaveText('2');
     await page.getByRole('button', {name: '一時保存をすべて削除', exact: true}).click();
     await page.getByRole('button', {name: '削除して変更を取り消す', exact: true}).click();
     await saved(page);
+    await expect(page.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('0 件');
+    await expect(page.locator('.storage-details > div').nth(2).locator('dd')).toHaveText('0 件');
+    await closeSettings(page);
     await expect(area(page, 1)).toHaveValue('保存する');
     await expect(page.locator('#count-changed')).toHaveText('0');
     const sizes = await page.evaluate(async () => {
@@ -162,6 +181,7 @@ async function load(page, files) {
     });
     await area(retry, 0).fill('保存失敗後の復旧');
     await expect(retry.locator('#draft-status')).toHaveAttribute('data-state', 'error');
+    await expect(retry.locator('#draft-status')).toBeVisible();
     await expect(area(retry, 0)).toHaveValue('保存失敗後の復旧');
     await retry.getByRole('button', {name: 'ファイルを閉じる'}).click();
     await expect(retry.getByRole('dialog', {name: '下書きを保存できませんでした'})).toBeVisible();
@@ -226,18 +246,24 @@ async function load(page, files) {
     await closePage.reload();
     await expect(closePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
     await expect(closePage.locator('#empty')).toBeVisible();
+    await openSettings(closePage);
     await expect(closePage.getByRole('button', {name: '一時保存をすべて削除'})).toBeEnabled();
+    await closeSettings(closePage);
     await load(closePage, [alpha, beta]);
     await expect(area(closePage, 0)).toHaveValue('閉じる前の下書き');
     await expect(area(closePage, 3)).toHaveValue('別ファイルの下書き');
     await closePage.getByRole('button', {name: 'ファイルを閉じる'}).click();
     await expect(closePage.locator('#empty')).toBeVisible();
+    await openSettings(closePage);
     await closePage.getByRole('button', {name: '一時保存をすべて削除'}).click();
     await closePage.getByRole('button', {name: '削除して変更を取り消す'}).click();
     await saved(closePage);
+    await closeSettings(closePage);
     await closePage.reload();
     await expect(closePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
+    await openSettings(closePage);
     await expect(closePage.getByRole('button', {name: '一時保存をすべて削除'})).toBeDisabled();
+    await closeSettings(closePage);
     await load(closePage, [alpha, beta]);
     await expect(area(closePage, 0)).toHaveValue('保存');
     await expect(area(closePage, 3)).toHaveValue('保存');
@@ -275,6 +301,11 @@ async function load(page, files) {
     const blockedPage = await blocked.newPage();
     await blockedPage.goto(baseURL);
     await expect(blockedPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');
+    await expect(blockedPage.locator('#draft-status')).toBeVisible();
+    await openSettings(blockedPage);
+    await expect(blockedPage.locator('.storage-details > div').nth(1).locator('dd')).toHaveText('確認できません');
+    await expect(blockedPage.getByRole('button', {name: '一時保存をすべて削除'})).toBeDisabled();
+    await closeSettings(blockedPage);
     await blockedPage.locator('#sample').click();
     await expect(area(blockedPage, 0)).toBeVisible();
     await expect(blockedPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');

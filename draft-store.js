@@ -152,5 +152,23 @@
     return result.exists;
   }
 
-  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear, forgetSession, hasSavedData};
+  async function getSummary() {
+    await writes;
+    return transaction(['catalogs', 'drafts'], 'readonly', (tx) => {
+      const summary = {files: 0, changes: 0};
+      tx.objectStore('catalogs').count().onsuccess = (event) => {
+        summary.files = event.target.result;
+      };
+      const request = tx.objectStore('drafts').openCursor();
+      request.onsuccess = (event) => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        if (Array.isArray(cursor.value?.edits)) summary.changes += cursor.value.edits.length;
+        cursor.continue();
+      };
+      return summary;
+    });
+  }
+
+  globalThis.DraftStore = {identify, readDrafts, remember, save, restore, clear, forgetSession, hasSavedData, getSummary};
 })();

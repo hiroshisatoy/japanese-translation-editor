@@ -87,6 +87,7 @@
   const exportButton = document.getElementById('export');
   const openButton = document.getElementById('open-file');
   const closeButton = document.getElementById('close-file');
+  const settingsButton = document.getElementById('settings');
   const countNodes = {
     all: document.getElementById('count-all'),
     untranslated: document.getElementById('count-untranslated'),
@@ -126,6 +127,21 @@
   let draftVersion = 0;
   let pendingDraftSaves = 0;
   let closingFile = false;
+  let summaryGeneration = 0;
+
+  document.addEventListener('translation-request-draft-info', async () => {
+    const generation = ++summaryGeneration;
+    try {
+      const summary = await DraftStore.getSummary();
+      if (generation === summaryGeneration) {
+        document.dispatchEvent(new CustomEvent('translation-draft-info', {detail: {summary}}));
+      }
+    } catch {
+      if (generation === summaryGeneration) {
+        document.dispatchEvent(new CustomEvent('translation-draft-info', {detail: {error: true}}));
+      }
+    }
+  });
 
   function draftStatus(state, message, canClear = loadedCatalogs.length > 0) {
     document.dispatchEvent(new CustomEvent('translation-draft-status', {
@@ -196,6 +212,7 @@
     fileInput.disabled = true;
     openButton.disabled = true;
     closeButton.disabled = true;
+    settingsButton.disabled = true;
     exportButton.disabled = true;
     progress.hidden = true;
     list.removeAttribute('aria-busy');
@@ -271,6 +288,7 @@
       fileInput.disabled = false;
       openButton.disabled = false;
       closeButton.disabled = loadedCatalogs.length === 0;
+      settingsButton.disabled = false;
       exportButton.disabled = entries.length === 0;
       if (warn) document.dispatchEvent(new Event('translation-close-warning'));
       if (didClose) document.getElementById('open-empty').focus();
