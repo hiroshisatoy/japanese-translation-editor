@@ -18,6 +18,17 @@ const fs = require('node:fs/promises');
   await expect(page.locator('#q')).toBeVisible();
   await expect(page.locator('.row').first()).toBeVisible();
   await expect(page.locator('#export')).toBeEnabled();
+  const filterResultLayout = async () => page.evaluate(() => {
+    const filter = document.getElementById('wp-filters').getBoundingClientRect();
+    const result = document.getElementById('result').getBoundingClientRect();
+    return {filterRight: filter.right, resultLeft: result.left, resultRight: result.right,
+      filterCenter: (filter.top + filter.bottom) / 2, resultCenter: (result.top + result.bottom) / 2,
+      viewportWidth: innerWidth, viewportOverflow: document.documentElement.scrollWidth > innerWidth};
+  });
+  const resultLayout = await filterResultLayout();
+  expect(resultLayout.resultLeft).toBeGreaterThanOrEqual(resultLayout.filterRight);
+  expect(resultLayout.resultLeft - resultLayout.filterRight).toBeLessThanOrEqual(20);
+  expect(Math.abs(resultLayout.filterCenter - resultLayout.resultCenter)).toBeLessThan(1);
   const positions = async () => page.locator('.status-option').evaluateAll((items) =>
     items.map((item) => ({top: item.getBoundingClientRect().top, left: item.getBoundingClientRect().left})));
   const desktop = await positions();
@@ -26,6 +37,7 @@ const fs = require('node:fs/promises');
   await page.keyboard.press('ArrowRight');
   await expect(page.getByRole('radio', {name: /未翻訳/})).toBeChecked();
   await expect(page.locator('.row').first()).toHaveAttribute('data-status','untranslated');
+  await expect(page.locator('#result')).toContainText('1 件 / 7 件');
   await page.keyboard.press('ArrowLeft');
   await expect(page.getByRole('radio', {name: /すべて/})).toBeChecked();
   const initial = await page.locator('#result').innerText();
@@ -66,6 +78,10 @@ const fs = require('node:fs/promises');
   const mobile = await positions();
   if (Math.abs(mobile[0].top - mobile[1].top) > 1 || mobile[1].left <= mobile[0].left) throw Error('Mobile filters should use available horizontal space');
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) throw Error('Mobile overflow');
+  const mobileResult = await filterResultLayout();
+  expect(mobileResult.resultLeft).toBeGreaterThanOrEqual(mobileResult.filterRight);
+  expect(mobileResult.resultRight).toBeLessThanOrEqual(mobileResult.viewportWidth);
+  expect(mobileResult.viewportOverflow).toBe(false);
   await page.screenshot({path:'/tmp/translation-editor-mobile.png'});
   const longName = `${'long-name-'.repeat(16)}ja.po`;
   const longProject = 'Extremely long project name '.repeat(40).trim();

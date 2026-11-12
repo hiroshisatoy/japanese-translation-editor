@@ -586,7 +586,8 @@ kbd {
 .brand-row { margin-bottom: 18px; }
 #wp-actions { display: flex; flex-wrap: nowrap; gap: 8px; }
 #wp-search { flex: 1 1 20rem; min-width: 0; }
-#wp-filters { flex-basis: 100%; padding: 12px 0 6px; }
+.filter-row { display: flex; align-items: center; gap: 16px; flex: 1 1 100%; min-width: 0; padding: 12px 0 6px; }
+#wp-filters { flex: 0 1 auto; min-width: 0; }
 .status-control { margin: 0; }
 /* Keep Stack's wrap fallback where balanced wrapping is unsupported. */
 @supports (flex-wrap: balance) {
@@ -595,7 +596,7 @@ kbd {
 .status-option { display: inline-flex; align-items: center; gap: 8px; }
 .status-option label { cursor: pointer; }
 .count { font-size: 12px; }
-.result { font-size: 13px; margin: 6px 0 12px; }
+.result { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow-wrap: anywhere; font-size: 13px; margin: 0; }
 .empty { margin: 8vh auto 0; padding: 32px; background: var(--sheet); border: 1px solid var(--line); border-radius: 4px; }
 .empty .lead { font-size: 22px; font-weight: 500; }
 .empty p + p { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
