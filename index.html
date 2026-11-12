@@ -13,12 +13,12 @@
     <div class="frame">
       <div class="brand-row">
         <h1 id="app-title">翻訳ビューア</h1>
-        <p id="catalog" class="meta"></p>
         <div class="brand-actions">
-          <progress id="load-progress" hidden aria-label="読み込みの進み具合"></progress>
           <div id="wp-actions"></div>
           <input id="file" class="file-input" type="file" name="file" aria-label="PO ファイルを選択" accept=".po,.pot,text/plain" multiple>
         </div>
+        <div id="catalog" class="meta" role="region" aria-label="ファイルとプロジェクトの情報" tabindex="0" hidden></div>
+        <progress id="load-progress" hidden aria-label="読み込みの進み具合"></progress>
       </div>
       <search aria-labelledby="app-title">
         <form id="finder" action="#finder" method="get">

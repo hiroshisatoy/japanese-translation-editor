@@ -956,6 +956,8 @@
     catalogLoaded = true;
     obsoleteCount = obsolete;
     catalog.replaceChildren();
+    catalog.hidden = names.length === 0;
+    catalog.scrollLeft = 0;
     if (names.length === 1) {
       const headers = catalogs[0].headers;
       const bits = [names[0]];

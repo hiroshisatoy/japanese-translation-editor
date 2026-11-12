@@ -67,6 +67,43 @@ const fs = require('node:fs/promises');
   if (Math.abs(mobile[0].top - mobile[1].top) > 1 || mobile[1].left <= mobile[0].left) throw Error('Mobile filters should use available horizontal space');
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth)) throw Error('Mobile overflow');
   await page.screenshot({path:'/tmp/translation-editor-mobile.png'});
+  const longName = `${'long-name-'.repeat(16)}ja.po`;
+  const longProject = 'Extremely long project name '.repeat(40).trim();
+  await page.locator('#file').setInputFiles({
+    name: longName,
+    mimeType: 'text/plain',
+    buffer: Buffer.from(`msgid ""\nmsgstr ""\n"Project-Id-Version: ${longProject}\\n"\n"Language: ja\\n"\n\nmsgid "Save"\nmsgstr "保存"\n`),
+  });
+  await expect(page.locator('#catalog')).toContainText(longName);
+  const catalog = page.getByRole('region', {name: 'ファイルとプロジェクトの情報'});
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({width, height: 844});
+    const layout = await page.evaluate(() => {
+      const meta = document.getElementById('catalog');
+      const exportRect = document.getElementById('export').getBoundingClientRect();
+      const openRect = document.querySelector('#wp-actions button:last-child').getBoundingClientRect();
+      const metaRect = meta.getBoundingClientRect();
+      return {
+        viewportOverflow: document.documentElement.scrollWidth > innerWidth,
+        metadataScrolls: meta.scrollWidth > meta.clientWidth,
+        spanTops: Array.from(meta.children, (child) => child.getBoundingClientRect().top),
+        metadataTop: metaRect.top,
+        exportTop: exportRect.top, exportBottom: exportRect.bottom,
+        openTop: openRect.top, openBottom: openRect.bottom,
+        openRight: openRect.right,
+      };
+    });
+    expect(layout.viewportOverflow).toBe(false);
+    expect(layout.metadataScrolls).toBe(true);
+    expect(Math.max(...layout.spanTops) - Math.min(...layout.spanTops)).toBeLessThan(1);
+    expect(Math.abs(layout.exportTop - layout.openTop)).toBeLessThan(1);
+    expect(Math.max(layout.exportBottom, layout.openBottom)).toBeLessThanOrEqual(layout.metadataTop);
+    expect(layout.openRight).toBeLessThanOrEqual(width);
+  }
+  await page.screenshot({path:'/tmp/translation-editor-long-header.png'});
+  await catalog.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => catalog.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
   if(errors.length) throw Error(errors.join('\n'));
   console.log({initial,download:download.suggestedFilename(),checks:'Search, clear, filters, editing, export, modal, mobile passed'});
   await browser.close();

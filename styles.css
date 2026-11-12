@@ -62,7 +62,6 @@ body {
   margin-inline: auto;
 }
 
-.brand-row,
 .find-row {
   display: flex;
   flex-wrap: wrap;
@@ -71,6 +70,10 @@ body {
 }
 
 .brand-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
   margin-bottom: 0.35rem;
 }
 
@@ -81,16 +84,43 @@ h1 {
   letter-spacing: 0.01em;
 }
 
+.brand-row h1 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .meta {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.2rem 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  /* Local covers reveal the edge shadows only when more text can be scrolled. */
+  background:
+    linear-gradient(to right, var(--sheet) 25%, transparent) left center / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--sheet) 25%, transparent) right center / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgb(0 0 0 / 0.16), transparent) left center / 0.6rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.16), transparent) right center / 0.6rem 100% no-repeat scroll,
+    var(--sheet);
   margin: 0;
   color: var(--muted);
   font-size: 0.875rem;
   min-width: 0;
 }
+
+.meta:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.meta span { flex: 0 0 auto; }
 
 .meta span + span {
   padding-inline-start: 0.7rem;
@@ -99,10 +129,17 @@ h1 {
 }
 
 .brand-actions {
+  grid-column: 2;
+  grid-row: 1;
   display: flex;
   align-items: center;
   gap: 0.6rem;
   margin-inline-start: auto;
+}
+
+.brand-row progress {
+  grid-column: 1 / -1;
+  grid-row: 3;
 }
 
 progress {
@@ -546,7 +583,7 @@ kbd {
 }
 .toolbar { border-bottom: 1px solid var(--line); padding-top: 16px; }
 .brand-row { margin-bottom: 18px; }
-#wp-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#wp-actions { display: flex; flex-wrap: nowrap; gap: 8px; }
 #wp-search { flex: 1 1 20rem; min-width: 0; }
 #wp-filters { flex-basis: 100%; padding: 12px 0 6px; }
 .status-control { margin: 0; }
@@ -567,9 +604,11 @@ kbd {
 .components-modal__content dl > div { display: flex; gap: 16px; }
 .components-modal__content dd { margin: 0; }
 @media (max-width: 600px) {
-  .brand-actions { width: 100%; margin-inline-start: 0; }
   #wp-search { flex-basis: 100%; }
   .empty { margin-top: 24px; padding: 24px; }
+}
+@media (max-width: 350px) {
+  .brand-row h1 { font-size: 0.75rem; letter-spacing: -0.04em; }
 }
 
 .draft-bar {
