@@ -88,5 +88,8 @@ mount('wp-search', <Search />);
 mount('wp-submit', <Button type="submit" variant="secondary" __next40pxDefaultSize>検索</Button>);
 mount('wp-filters', <Filters />);
 mount('wp-help', <Help />);
-mount('wp-sample', <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>);
+mount('wp-sample', <div className="empty-actions">
+  <Button variant="primary" __next40pxDefaultSize onClick={() => document.getElementById('file').click()}>PO ファイルを開く</Button>
+  <Button id="sample" variant="secondary" __next40pxDefaultSize>見本を表示</Button>
+</div>);
 mount('wp-drafts', <DraftStatus />);

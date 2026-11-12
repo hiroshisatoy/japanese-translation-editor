@@ -1168,7 +1168,9 @@
    * @return {Promise<void>}
    */
   async function loadSample() {
-    const generation = loadGeneration;
+    // A deliberate sample selection takes precedence over pending restoration.
+    const generation = ++loadGeneration;
+    searchGeneration++;
     let text = '';
     let filename = 'sample.po';
     try {
@@ -1403,9 +1405,14 @@
         return;
       }
     } catch {
-      // An unavailable or damaged draft store must not block the editor.
+      if (generation === loadGeneration) {
+        draftStatus('error', '一時保存を確認できませんでした。ファイルは開けます。', false);
+      }
+      return;
     }
-    if (generation === loadGeneration) loadSample();
+    if (generation === loadGeneration) {
+      draftStatus('ready', 'PO ファイルを開くか、見本を表示してください。', false);
+    }
   }
 
   if (!globalThis.PoParser) {

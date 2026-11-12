@@ -42,10 +42,14 @@ async function load(page, files) {
     context.on('page', (page) => page.on('pageerror', (error) => errors.push(error.message)));
     let page = await context.newPage();
     await page.goto(baseURL);
-    await saved(page);
+    await expect(page.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
     const alpha = fixture('alpha.po');
     const beta = fixture('beta.po');
-    await load(page, [alpha, beta]);
+    const chooserPromise = page.waitForEvent('filechooser');
+    await page.getByRole('button', {name: 'PO ファイルを開く', exact: true}).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles([alpha, beta]);
+    await saved(page);
     await expect(page.locator('#count-all')).toHaveText('6');
     await area(page, 0).fill('ツールバーの下書き');
     await area(page, 1).fill('');
@@ -146,7 +150,7 @@ async function load(page, files) {
     const retryContext = await browser.newContext();
     const retry = await retryContext.newPage();
     await retry.goto(baseURL);
-    await saved(retry);
+    await expect(retry.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
     await load(retry, alpha);
     await retry.evaluate(() => {
       window.originalTransaction = IDBDatabase.prototype.transaction;
@@ -172,7 +176,7 @@ async function load(page, files) {
     const baselineContext = await browser.newContext();
     const baselinePage = await baselineContext.newPage();
     await baselinePage.goto(baseURL);
-    await saved(baselinePage);
+    await expect(baselinePage.locator('#draft-status')).toHaveAttribute('data-state', 'ready');
     await baselinePage.evaluate(() => {
       window.originalRemember = DraftStore.remember;
       DraftStore.remember = () => new Promise((resolve, reject) => {
@@ -201,6 +205,9 @@ async function load(page, files) {
     });
     const blockedPage = await blocked.newPage();
     await blockedPage.goto(baseURL);
+    await expect(blockedPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');
+    await blockedPage.locator('#sample').click();
+    await expect(area(blockedPage, 0)).toBeVisible();
     await expect(blockedPage.locator('#draft-status')).toHaveAttribute('data-state', 'error');
     await area(blockedPage, 0).fill('保存不可でも編集できる');
     const downloadPromise = blockedPage.waitForEvent('download');
